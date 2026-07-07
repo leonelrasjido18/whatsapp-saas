@@ -1,0 +1,126 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { NextResponse } from "next/server";
+import { createClient as createSbClient } from "@supabase/supabase-js";
+import { processNextBatch } from "@/features/inbox/services/buffer";
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SEC-05: Internal buffer process endpoint
+//
+// Protected via HMAC-SHA256 of the raw request body with BUFFER_PROCESS_SECRET.
+// Header: Authorization: Bearer {hmac-hex}
+//
+// Used for:
+//   - Targeted testing: POST { batchId: "..." } to process a specific batch
+//   - General processing: POST {} or POST with no body to process next ready batch
+//
+// workspace_id is NEVER trusted from the request body — always read server-side.
+// ──────────────────────────────────────────────────────────────────────────────
+
+function svc() {
+  return createSbClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+function verifyHmac(rawBody: string, providedSig: string): boolean {
+  const secret = process.env.BUFFER_PROCESS_SECRET;
+  if (!secret) {
+    console.error("[internal/buffer/process] BUFFER_PROCESS_SECRET is not set");
+    return false;
+  }
+
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+
+  // Both buffers must be the same length for timingSafeEqual
+  const expectedBuf = Buffer.from(expected);
+  const providedBuf = Buffer.from(providedSig);
+
+  if (expectedBuf.length !== providedBuf.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuf, providedBuf);
+}
+
+export async function POST(request: Request): Promise<NextResponse> {
+  // ── 1. Read raw body for HMAC verification ────────────────────────────────
+  const rawBody = await request.text();
+  const authHeader = request.headers.get("Authorization") ?? "";
+  const providedSig = authHeader.replace("Bearer ", "");
+
+  if (!providedSig) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!verifyHmac(rawBody, providedSig)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ── 2. Parse optional batchId from body ───────────────────────────────────
+  let batchId: string | undefined;
+  if (rawBody.trim()) {
+    try {
+      const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+      if (typeof parsed.batchId === "string") {
+        batchId = parsed.batchId;
+      }
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+  }
+
+  // ── 3a. Specific batch requested ──────────────────────────────────────────
+  if (batchId) {
+    const supabase = svc();
+
+    // Validate batch exists and is in a processable state
+    // workspace_id is read from DB — never from request body
+    const { data: batch, error: batchError } = await supabase
+      .from("message_batches")
+      .select("id, workspace_id, status")
+      .eq("id", batchId)
+      .in("status", ["buffering", "processing"])
+      .maybeSingle();
+
+    if (batchError) {
+      console.error(
+        "[internal/buffer/process] batch lookup error:",
+        batchError,
+      );
+      return NextResponse.json(
+        { error: "Failed to look up batch" },
+        { status: 500 },
+      );
+    }
+
+    if (!batch) {
+      return NextResponse.json(
+        { error: "Batch not found or not in a processable state" },
+        { status: 404 },
+      );
+    }
+
+    // Force the batch into 'buffering' with flush_at = now so processNextBatch
+    // can claim it immediately via the RPC
+    await supabase
+      .from("message_batches")
+      .update({
+        status: "buffering",
+        flush_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", batchId)
+      .eq("workspace_id", batch.workspace_id); // explicit workspace guard
+  }
+
+  // ── 3b. Process next ready batch (or the one we just primed above) ────────
+  const result = await processNextBatch();
+
+  return NextResponse.json({
+    ok: true,
+    processed: result.processed,
+    batchId: batchId ?? undefined,
+    ...(result.error ? { error: result.error } : {}),
+  });
+}

@@ -1,3 +1,5 @@
+import type { PlanTier, SubscriptionStatus } from "@/shared/types/billing";
+
 export interface WorkspaceWithStats {
   id: string;
   name: string;
@@ -6,6 +8,10 @@ export interface WorkspaceWithStats {
   member_count: number;
   conversation_count: number;
   ycloud_connected: boolean;
+  plan_tier: PlanTier;
+  subscription_status: SubscriptionStatus;
+  last_payment_date?: string;
+  last_payment_amount?: number;
 }
 
 export type UseCase = "setter" | "soporte" | "agendamiento" | "general";

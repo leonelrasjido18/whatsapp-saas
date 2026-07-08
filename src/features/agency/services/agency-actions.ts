@@ -10,6 +10,7 @@ import type {
   GetWorkspacesResult,
   WorkspaceWithStats,
 } from "../types";
+import type { PlanTier, SubscriptionStatus } from "@/shared/types/billing";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -308,10 +309,10 @@ export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> 
 
   const service = svc();
 
-  // Fetch all workspaces
+  // Fetch all workspaces with billing info
   const { data: workspaces, error: wsError } = await service
     .from("workspaces")
-    .select("id, name, slug, created_at")
+    .select("id, name, slug, created_at, plan_tier, subscription_status")
     .order("created_at", { ascending: false });
 
   if (wsError) {
@@ -345,6 +346,14 @@ export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> 
     .eq("provider", "ycloud")
     .in("workspace_id", ids);
 
+  // Last payments (most recent per workspace)
+  const { data: payments } = await service
+    .from("payments")
+    .select("workspace_id, amount, created_at")
+    .in("workspace_id", ids)
+    .eq("status", "approved")
+    .order("created_at", { ascending: false });
+
   // Build lookup maps
   const memberMap = new Map<string, number>();
   for (const m of memberships ?? []) {
@@ -364,21 +373,43 @@ export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> 
     ycloudMap.set(row.workspace_id, row.enabled);
   }
 
+  // Last payment map (only keep the first/most recent per workspace)
+  const lastPaymentMap = new Map<string, { date: string; amount: number }>();
+  for (const p of payments ?? []) {
+    const row = p as {
+      workspace_id: string;
+      amount: number;
+      created_at: string;
+    };
+    if (!lastPaymentMap.has(row.workspace_id)) {
+      lastPaymentMap.set(row.workspace_id, {
+        date: row.created_at,
+        amount: row.amount,
+      });
+    }
+  }
+
   const result: WorkspaceWithStats[] = (
     workspaces as {
       id: string;
       name: string;
       slug: string;
       created_at: string;
+      plan_tier: string;
+      subscription_status: string;
     }[]
   ).map((w) => ({
     id: w.id,
     name: w.name,
     slug: w.slug,
     created_at: w.created_at,
+    plan_tier: w.plan_tier as PlanTier,
+    subscription_status: w.subscription_status as SubscriptionStatus,
     member_count: memberMap.get(w.id) ?? 0,
     conversation_count: convMap.get(w.id) ?? 0,
     ycloud_connected: ycloudMap.get(w.id) ?? false,
+    last_payment_date: lastPaymentMap.get(w.id)?.date,
+    last_payment_amount: lastPaymentMap.get(w.id)?.amount,
   }));
 
   return { workspaces: result };

@@ -266,6 +266,21 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     return { processed: false };
   }
 
+  // ── 2b. Check subscription status — if suspended, don't process ───────────
+  const { data: workspace } = await supabase
+    .from("workspaces")
+    .select("subscription_status")
+    .eq("id", batch.workspace_id)
+    .single();
+
+  if (workspace?.subscription_status === "suspended") {
+    console.info(
+      `[buffer] workspace ${batch.workspace_id} is suspended, canceling batch`,
+    );
+    await supabase.rpc("cancel_batch", { p_batch_id: batch.id });
+    return { processed: false, error: "workspace_suspended" };
+  }
+
   const retryCount = (batch.meta?.retry_count as number | undefined) ?? 0;
 
   try {

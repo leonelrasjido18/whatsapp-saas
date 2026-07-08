@@ -1,8 +1,10 @@
 // F7: SEC-06 Cost Enforcer — hard budget enforcement with observable alert events.
 // Distinct from cost-tracker.ts (which only records usage).
 // This module ACTS on budget state: degrade or cut AI when thresholds are crossed.
+// Now respects per-plan limits from the billing tiers.
 
 import { createClient as createSbClient } from "@supabase/supabase-js";
+import { getPlan, type PlanTier } from "@/features/billing/plans";
 
 function svc() {
   return createSbClient(
@@ -10,12 +12,6 @@ function svc() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 }
-
-// Hard cut: AI is completely halted above this daily token count
-const DAILY_TOKEN_HARD_LIMIT = 1_500_000;
-
-// Warn threshold: degrade to a cheaper model above this count
-const DAILY_TOKEN_WARN_THRESHOLD = 1_000_000;
 
 export type CostPolicy = "allow" | "degrade" | "cut";
 
@@ -26,12 +22,12 @@ export interface CostPolicyResult {
 }
 
 /**
- * Enforces the workspace daily token budget.
+ * Enforces the workspace daily token budget based on its plan tier.
  *
- * Reads today's llm_usage events, compares against thresholds, and:
- *   - >= DAILY_TOKEN_HARD_LIMIT  → policy=cut (caller must not invoke AI)
- *   - >= DAILY_TOKEN_WARN_THRESHOLD → policy=degrade + inserts cost_alert event
- *   - otherwise                  → policy=allow
+ * Reads today's llm_usage events and the workspace's plan, then:
+ *   - >= DAILY_BUDGET * 1.5  → policy=cut (AI halted)
+ *   - >= DEGRADE_THRESHOLD   → policy=degrade + cost_alert event
+ *   - otherwise              → policy=allow
  *
  * Fails open on DB errors to avoid blocking legitimate traffic.
  */
@@ -39,6 +35,26 @@ export async function enforceCostPolicy(
   workspaceId: string,
 ): Promise<CostPolicyResult> {
   const supabase = svc();
+
+  // Fetch workspace plan
+  const { data: workspace, error: wsError } = await supabase
+    .from("workspaces")
+    .select("plan_tier")
+    .eq("id", workspaceId)
+    .single();
+
+  if (wsError || !workspace) {
+    console.error(
+      "[cost-enforcer] failed to read workspace plan:",
+      wsError,
+    );
+    // Fail open — don't block on DB errors
+    return { policy: "allow", reason: "db_error_fail_open" };
+  }
+
+  const plan = getPlan(workspace.plan_tier as PlanTier);
+  const warnThreshold = plan.degrade_threshold;
+  const hardLimit = plan.daily_token_budget * 1.5; // 50% over budget = hard cut
 
   const dayStart = new Date();
   dayStart.setUTCHours(0, 0, 0, 0);
@@ -62,14 +78,14 @@ export async function enforceCostPolicy(
     return sum + (typeof t === "number" ? t : 0);
   }, 0);
 
-  if (totalTokensToday >= DAILY_TOKEN_HARD_LIMIT) {
+  if (totalTokensToday >= hardLimit) {
     console.warn(
-      `[cost-enforcer] workspace=${workspaceId} hit hard limit: ${totalTokensToday} tokens`,
+      `[cost-enforcer] workspace=${workspaceId} (${workspace.plan_tier}) hit hard limit: ${totalTokensToday} >= ${hardLimit} tokens`,
     );
     return { policy: "cut", reason: "daily_hard_limit" };
   }
 
-  if (totalTokensToday >= DAILY_TOKEN_WARN_THRESHOLD) {
+  if (totalTokensToday >= warnThreshold) {
     // Insert an observable alert event — visible in the events stream
     await supabase.from("events").insert({
       type: "cost_alert",
@@ -77,13 +93,14 @@ export async function enforceCostPolicy(
       workspace_id: workspaceId,
       payload: {
         total_tokens_today: totalTokensToday,
-        threshold: DAILY_TOKEN_WARN_THRESHOLD,
-        hard_limit: DAILY_TOKEN_HARD_LIMIT,
+        threshold: warnThreshold,
+        hard_limit: hardLimit,
+        plan_tier: workspace.plan_tier,
       },
     });
 
     console.warn(
-      `[cost-enforcer] workspace=${workspaceId} warn threshold crossed: ${totalTokensToday} tokens`,
+      `[cost-enforcer] workspace=${workspaceId} (${workspace.plan_tier}) warn threshold crossed: ${totalTokensToday} >= ${warnThreshold} tokens`,
     );
 
     return {

@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Settings,
   Trash2,
+  CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -111,13 +112,14 @@ export function WorkspacesTable({ workspaces }: Props) {
           className={cn(
             "hidden md:grid gap-4 px-4 py-2.5",
             "border-b border-border bg-muted/40",
-            "grid-cols-[2fr_1fr_1fr_1fr_1fr_auto]",
+            "grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto]",
           )}
         >
           {[
             "Workspace",
             "Miembros",
-            "Conversaciones",
+            "Plan",
+            "Suscripción",
             "YCloud",
             "Creado",
             "",
@@ -164,7 +166,7 @@ export function WorkspacesTable({ workspaces }: Props) {
             key={workspace.id}
             className={cn(
               "flex flex-col gap-3 px-4 py-4",
-              "md:grid md:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] md:items-center md:gap-4 md:py-3",
+              "md:grid md:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] md:items-center md:gap-4 md:py-3",
               "border-b border-border last:border-0",
               "hover:bg-muted/20 transition-colors duration-150",
             )}
@@ -189,14 +191,36 @@ export function WorkspacesTable({ workspaces }: Props) {
               </p>
             </div>
 
-            {/* Conversaciones */}
+            {/* Plan */}
             <div className="flex items-center gap-2 md:block">
               <span className="text-xs text-muted-foreground md:hidden">
-                Conversaciones:
+                Plan:
               </span>
-              <p className="font-mono text-sm text-foreground">
-                {workspace.conversation_count}
-              </p>
+              <Badge variant="outline" className="w-fit capitalize">
+                {workspace.plan_tier}
+              </Badge>
+            </div>
+
+            {/* Suscripción */}
+            <div className="flex items-center gap-2 md:block">
+              <span className="text-xs text-muted-foreground md:hidden">
+                Suscripción:
+              </span>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "w-fit capitalize",
+                  workspace.subscription_status === "active"
+                    ? "border-success/30 bg-success/10 text-success"
+                    : workspace.subscription_status === "suspended"
+                      ? "border-destructive/30 bg-destructive/10 text-destructive"
+                      : workspace.subscription_status === "past_due"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-600"
+                        : "border-border text-muted-foreground"
+                )}
+              >
+                {workspace.subscription_status}
+              </Badge>
             </div>
 
             {/* YCloud badge */}
@@ -257,6 +281,19 @@ export function WorkspacesTable({ workspaces }: Props) {
                 <Settings className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">
                   Gestionar
+                </span>
+              </Button>
+
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2.5 text-muted-foreground hover:text-foreground"
+                aria-label={`Billing de ${workspace.name}`}
+                onClick={() => handleEnter(workspace.id, `/workspaces/${workspace.id}/billing`)}
+              >
+                <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">
+                  Billing
                 </span>
               </Button>
 

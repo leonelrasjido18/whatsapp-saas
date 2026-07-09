@@ -36,6 +36,7 @@
     "cmdk": "^1.1.1",
     "geist": "^1.7.2",
     "lucide-react": "^1.17.0",
+    "mercadopago": "^2.0.0",
     "next": "^16.0.0",
     "next-themes": "^0.4.6",
     "react": "^19.0.0",
@@ -44,8 +45,7 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.4.3",
-    "zustand": "^5.0.14",
-    "mercadopago": "^2.0.0"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
@@ -56,6 +56,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
     "postcss": "^8.4.0",
+    "supabase": "^2.109.1",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.7.0"
   }

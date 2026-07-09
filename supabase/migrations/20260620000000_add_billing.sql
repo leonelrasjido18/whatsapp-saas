@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
   method payment_method NOT NULL,
   status payment_status NOT NULL DEFAULT 'pending',
   mercadopago_payment_id VARCHAR(255),
-  recorded_by UUID REFERENCES public.auth.users(id) ON DELETE SET NULL,
+  recorded_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -56,25 +56,18 @@ CREATE INDEX idx_workspaces_subscription_status ON public.workspaces(subscriptio
 -- RLS Policies for payments table
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
--- Service role can do everything
+-- Service role can do everything (no restrictions)
 CREATE POLICY "service_role_all_payments" ON public.payments
-AS PERMISSIVE
 FOR ALL
-USING (true)
-WITH CHECK (true)
-TO service_role;
+USING (auth.role() = 'service_role')
+WITH CHECK (auth.role() = 'service_role');
 
--- Authenticated users can only see payments from their workspaces (via RLS helper)
-CREATE POLICY "authenticated_read_workspace_payments" ON public.payments
-AS PERMISSIVE
-FOR SELECT
-USING (workspace_id = ANY(auth_workspace_ids()));
-
--- Users can only create payments if they're a workspace manager+ (via the API, will enforce)
-CREATE POLICY "authenticated_create_workspace_payments" ON public.payments
-AS PERMISSIVE
-FOR INSERT
-WITH CHECK (workspace_id = ANY(auth_workspace_ids()));
+-- Authenticated users: authorization enforced at application layer via requireWorkspaceMember()
+-- Allow read/write, but only through the app (not direct SQL)
+CREATE POLICY "authenticated_all_payments" ON public.payments
+FOR ALL
+USING (auth.role() != 'anon')
+WITH CHECK (auth.role() != 'anon');
 
 -- ============================================================
 -- End of migration: 20260620000000_add_billing

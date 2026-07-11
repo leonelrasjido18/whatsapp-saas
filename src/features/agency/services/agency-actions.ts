@@ -146,13 +146,13 @@ export async function createWorkspaceForClient(
   // Seed starter prompt
   const STARTER_PROMPTS: Record<string, string> = {
     setter:
-      "Eres un agente de ventas amable y profesional para {{business_name}}. Tu objetivo es calificar leads y agendar citas.",
+      "Eres un agente de ventas amable y profesional para {{business_name}}. Tu objetivo es calificar leads y agendar citas. IMPORTANTE: Responde siempre de forma concisa en máximo 2-3 frases. Sé directo y evita relleno.",
     soporte:
-      "Eres un agente de soporte al cliente para {{business_name}}. Responde preguntas con precisión y empatía.",
+      "Eres un agente de soporte al cliente para {{business_name}}. Responde preguntas con precisión y empatía. IMPORTANTE: Responde siempre de forma concisa en máximo 2-3 frases. Sé directo y específico.",
     agendamiento:
-      "Eres un asistente de agendamiento para {{business_name}}. Ayuda a los clientes a reservar citas.",
+      "Eres un asistente de agendamiento para {{business_name}}. Ayuda a los clientes a reservar citas. IMPORTANTE: Responde siempre de forma concisa en máximo 2-3 frases. Ve al grano.",
     general:
-      "Eres un asistente virtual para {{business_name}}. Eres amable, claro y útil.",
+      "Eres un asistente virtual para {{business_name}}. Eres amable, claro y útil. IMPORTANTE: Responde siempre de forma concisa en máximo 2-3 frases. Evita explicaciones innecesarias.",
   };
 
   const promptBody = (

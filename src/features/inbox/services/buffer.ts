@@ -417,13 +417,26 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       return { processed: true, conversationId: batch.conversation_id };
     }
 
-    // ── 8. Generate AI reply with tool-calling support ───────────────────────
+    // ── 8. Load YCloud integration credentials ──────────────────────────────
+    const { data: integration, error: intError } = await supabase
+      .from("integrations")
+      .select("credentials, config")
+      .eq("workspace_id", batch.workspace_id)
+      .eq("provider", "ycloud")
+      .eq("enabled", true)
+      .single();
+
+    if (intError || !integration) {
+      throw new Error(`YCloud integration not found: ${intError?.message}`);
+    }
+
+    // ── 8a. Generate AI reply with tool-calling support ───────────────────────
     // Resolve workspace model (falls back to env default or gpt-4o-mini).
     // costModel from SEC-06 takes priority when cost policy is degraded.
     const workspaceModel = await getWorkspaceModel(batch.workspace_id);
     const model = costModel ?? workspaceModel;
 
-    // ── 8a. Load contact phone for typing indicator ────────────────────────────
+    // ── 8b. Load contact phone for typing indicator ────────────────────────────
     const { data: contactRow } = await supabase
       .from("contacts")
       .select("phone")
@@ -431,7 +444,7 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       .single();
     const toPhone = (contactRow as { phone: string } | null)?.phone ?? "";
 
-    // ── 8b. Load YCloud credentials for typing indicator ────────────────────────
+    // ── 8c. Load YCloud credentials for typing indicator ────────────────────────
     const { credentials: ycloudCreds } = integration as {
       credentials: Record<string, unknown>;
     };
@@ -441,7 +454,7 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       (ycloudCfg?.config as { phone_number?: string } | null)?.phone_number ??
       "";
 
-    // ── 8c. Send typing ON indicator ─────────────────────────────────────────
+    // ── 8d. Send typing ON indicator ──────────────────────────────────────────
     if (yCloudApiKey && fromPhone && toPhone) {
       await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, true);
     }
@@ -456,12 +469,12 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       history,
     });
 
-    // ── 8d. Send typing OFF indicator ────────────────────────────────────────
+    // ── 8e. Send typing OFF indicator ────────────────────────────────────────
     if (yCloudApiKey && fromPhone && toPhone) {
       await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, false);
     }
 
-    // ── 8. Record LLM usage ──────────────────────────────────────────────────
+    // ── 8f. Record LLM usage ─────────────────────────────────────────────────
     await recordLlmUsage({
       workspaceId: batch.workspace_id,
       conversationId: batch.conversation_id,
@@ -471,20 +484,7 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       completionTokens: reply.outputTokens,
     });
 
-    // ── 9. Load YCloud integration credentials ──────────────────────────────
-    const { data: integration, error: intError } = await supabase
-      .from("integrations")
-      .select("credentials, config")
-      .eq("workspace_id", batch.workspace_id)
-      .eq("provider", "ycloud")
-      .eq("enabled", true)
-      .single();
-
-    if (intError || !integration) {
-      throw new Error(`YCloud integration not found: ${intError?.message}`);
-    }
-
-    // ── 10a. Dispatch via single exit point (SEC-04) ────────────────────────
+    // ── 9. Dispatch via single exit point (SEC-04) ──────────────────────────
     const dispatchResult = await dispatchText({
       workspaceId: batch.workspace_id,
       conversationId: batch.conversation_id,

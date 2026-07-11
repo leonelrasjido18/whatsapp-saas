@@ -339,3 +339,41 @@ function extractYCloudErrorMessage(body: unknown): string | null {
   if (error && typeof error.message === "string") return error.message;
   return null;
 }
+
+/**
+ * Sends a typing indicator ("escribiendo...") via YCloud WhatsApp API.
+ * @param apiKey - YCloud API key
+ * @param from - Sender phone (with country code, e.g., +1234567890)
+ * @param to - Recipient phone (with country code, e.g., +1234567890)
+ * @param isTyping - true for "typing", false for "stop_typing"
+ */
+export async function sendTypingIndicator(
+  apiKey: string,
+  from: string,
+  to: string,
+  isTyping: boolean = true,
+): Promise<void> {
+  try {
+    const response = await fetch(YCLOUD_MESSAGES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+      },
+      body: JSON.stringify({
+        type: "status",
+        from,
+        to,
+        status: isTyping ? "typing" : "stop_typing",
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `[ycloud-client] typing indicator failed (${response.status})`,
+      );
+    }
+  } catch (err) {
+    console.warn("[ycloud-client] typing indicator error:", err);
+  }
+}

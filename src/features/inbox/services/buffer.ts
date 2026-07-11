@@ -3,6 +3,7 @@ import { generateWithTools, getWorkspaceModel } from "./openrouter";
 import { recordLlmUsage } from "./cost-tracker";
 import { dispatchText, dispatchTemplate } from "./dispatch";
 import { decide, applyTransition } from "./decision-engine";
+import { sendTypingIndicator } from "./ycloud-client";
 import type { ToolContext } from "@/features/tools/core/tool";
 import { resolveSystemPrompt } from "./prompt-resolver";
 import { buildSystemPrompt } from "./prompt-builder";
@@ -422,6 +423,29 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     const workspaceModel = await getWorkspaceModel(batch.workspace_id);
     const model = costModel ?? workspaceModel;
 
+    // ── 8a. Load contact phone for typing indicator ────────────────────────────
+    const { data: contactRow } = await supabase
+      .from("contacts")
+      .select("phone")
+      .eq("id", conversation.contact_id as string)
+      .single();
+    const toPhone = (contactRow as { phone: string } | null)?.phone ?? "";
+
+    // ── 8b. Load YCloud credentials for typing indicator ────────────────────────
+    const { credentials: ycloudCreds } = integration as {
+      credentials: Record<string, unknown>;
+    };
+    const yCloudApiKey =
+      (ycloudCreds?.ycloud_api_key as string | undefined) ?? "";
+    const fromPhone =
+      (ycloudCfg?.config as { phone_number?: string } | null)?.phone_number ??
+      "";
+
+    // ── 8c. Send typing ON indicator ─────────────────────────────────────────
+    if (yCloudApiKey && fromPhone && toPhone) {
+      await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, true);
+    }
+
     const reply = await generateWithTools({
       systemPrompt: finalSystemPrompt,
       model,
@@ -431,6 +455,11 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       toolContext: toolCtx,
       history,
     });
+
+    // ── 8d. Send typing OFF indicator ────────────────────────────────────────
+    if (yCloudApiKey && fromPhone && toPhone) {
+      await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, false);
+    }
 
     // ── 8. Record LLM usage ──────────────────────────────────────────────────
     await recordLlmUsage({

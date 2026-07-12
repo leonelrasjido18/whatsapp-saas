@@ -46,6 +46,11 @@ export async function middleware(request: NextRequest) {
     "/signup",
     "/forgot-password",
     "/reset-password",
+    // Legal pages — must stay public: Meta App Review validates these URLs
+    // with a logged-out crawler.
+    "/privacy",
+    "/terms",
+    "/data-deletion",
   ];
   const isPublicRoute = publicRoutes.includes(pathname);
 

@@ -115,6 +115,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         // candidates discarded — only the selected page's token is kept
       },
       config: {
+        // Preserve workspace prefs (buffer_silence_seconds, etc.) across
+        // (re)connections; identity keys below overwrite the old page.
+        ...((integration.config as object) ?? {}),
         page_id: selected.pageId,
         page_name: selected.name,
         ig_account_id: selected.igAccountId,

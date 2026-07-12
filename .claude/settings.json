@@ -10,7 +10,9 @@
       "Bash(npm run:*)",
       "Bash(supabase:*)",
       "Bash(vercel:*)",
-      "Bash(brew install supabase/tap/supabase)"
+      "Bash(brew install supabase/tap/supabase)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)"
     ]
   }
 }

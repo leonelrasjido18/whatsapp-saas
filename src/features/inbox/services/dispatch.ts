@@ -429,7 +429,8 @@ export async function dispatchTemplate(
     type: "template",
     body: templateName,
     wamid: wamid ?? null,
-    status: wamid ? "queued" : "queued",
+    // Templates start 'queued'; the status webhook advances them (sent/delivered/read).
+    status: "queued",
     sender_user_id: senderUserId ?? null,
     meta: {
       template_name: templateName,

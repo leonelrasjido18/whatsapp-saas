@@ -108,6 +108,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 
+    // Merge with the existing config so a RECONNECT doesn't wipe workspace
+    // preferences (buffer_silence_seconds, message_history_window) nor the
+    // current page identity while the user picks a page again.
+    const { data: existing } = await svc
+      .from("integrations")
+      .select("config")
+      .eq("workspace_id", wsid)
+      .eq("provider", "meta")
+      .maybeSingle();
+
     await svc.from("integrations").upsert(
       {
         workspace_id: wsid,
@@ -119,7 +129,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           user_token_expires_at: expiresAt,
           candidates: JSON.stringify(candidates),
         },
-        config: { pending_selection: true },
+        config: {
+          ...((existing?.config as object) ?? {}),
+          pending_selection: true,
+        },
         updated_at: new Date().toISOString(),
       },
       { onConflict: "workspace_id,provider" },

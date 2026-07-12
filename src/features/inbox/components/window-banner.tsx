@@ -5,14 +5,20 @@ import { cn } from "@/lib/utils";
 
 interface WindowBannerProps {
   windowExpiresAt: string | null;
+  channel?: string;
 }
 
-export function WindowBanner({ windowExpiresAt }: WindowBannerProps) {
+export function WindowBanner({ windowExpiresAt, channel = "whatsapp" }: WindowBannerProps) {
   // No window tracked → treat as open
   if (windowExpiresAt === null) return null;
 
   // Window still open
   if (new Date(windowExpiresAt) > new Date()) return null;
+
+  const isMeta = channel === "facebook" || channel === "instagram";
+  const message = isMeta
+    ? "La ventana de 24 horas expiró. Podrás responder cuando el cliente vuelva a escribir."
+    : "Ventana 24h expirada — Solo puedes enviar templates aprobados";
 
   return (
     <div
@@ -24,7 +30,7 @@ export function WindowBanner({ windowExpiresAt }: WindowBannerProps) {
       )}
     >
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span>Ventana 24h expirada — Solo puedes enviar templates aprobados</span>
+      <span>{message}</span>
     </div>
   );
 }

@@ -14,10 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ModelPicker } from "@/features/agents/components/model-picker";
+import { MetaSection } from "./meta-section";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Provider = "ycloud" | "openrouter" | "highlevel";
+type Provider = "ycloud" | "openrouter" | "highlevel" | "meta";
 
 type IntegrationData = {
   provider: Provider;
@@ -801,6 +802,7 @@ export function IntegrationsTab({ workspaceId, initialIntegrations }: Props) {
   }, [workspaceId]);
 
   const ycloud = findIntegration(integrations, "ycloud");
+  const meta = findIntegration(integrations, "meta");
   const openrouter = findIntegration(integrations, "openrouter");
   const highlevel = findIntegration(integrations, "highlevel");
 
@@ -809,6 +811,13 @@ export function IntegrationsTab({ workspaceId, initialIntegrations }: Props) {
       <YCloudSection
         workspaceId={workspaceId}
         initial={ycloud}
+        onSaved={refresh}
+      />
+      <Separator />
+      <MetaSection
+        key={meta ? `meta-${meta.enabled}-${JSON.stringify(meta.config ?? {})}` : "meta"}
+        workspaceId={workspaceId}
+        initial={meta as any}
         onSaved={refresh}
       />
       <Separator />

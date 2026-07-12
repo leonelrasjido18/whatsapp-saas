@@ -4,6 +4,7 @@ import type {
   ConversationState,
 } from "@/features/inbox/types";
 import { StateBadge } from "./state-badge";
+import { ChannelBadge } from "./channel-badge";
 
 interface ConversationItemProps {
   conversation: ConversationWithContact;
@@ -11,7 +12,7 @@ interface ConversationItemProps {
   onClick: () => void;
 }
 
-function getInitials(name: string | null, phone: string): string {
+function getInitials(name: string | null, phone: string | null, channel: string): string {
   if (name && name.trim().length > 0) {
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) {
@@ -19,7 +20,8 @@ function getInitials(name: string | null, phone: string): string {
     }
     return name.trim().slice(0, 2).toUpperCase();
   }
-  return phone.slice(-4);
+  if (phone) return phone.slice(-4);
+  return channel === "instagram" ? "IG" : channel === "facebook" ? "FB" : "??";
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -49,10 +51,22 @@ export function ConversationItem({
   onClick,
 }: ConversationItemProps) {
   const { contact, last_message, unread_count, last_message_at } = conversation;
-  const displayName = contact.name ?? contact.phone;
-  const initials = getInitials(contact.name, contact.phone);
+  const channel = contact.channel ?? "whatsapp";
+  
+  const displayName =
+    contact.name ??
+    contact.phone ??
+    (channel === "instagram"
+      ? "Usuario de Instagram"
+      : channel === "facebook"
+        ? "Usuario de Messenger"
+        : "Usuario");
+
+  const initials = getInitials(contact.name, contact.phone, channel);
   const preview = truncate(last_message?.body ?? null, 60);
   const time = timeAgo(last_message_at);
+
+  const subIdentifier = contact.phone ?? (contact.external_id ? `ID: ${contact.external_id.slice(-8)}` : "");
 
   return (
     <button
@@ -66,15 +80,25 @@ export function ConversationItem({
       aria-current={isActive ? "page" : undefined}
     >
       {/* Avatar */}
-      <div
-        className={cn(
-          "h-10 w-10 shrink-0 rounded-full flex items-center justify-center",
-          "bg-primary/10 text-primary font-mono text-xs font-semibold select-none",
-        )}
-        aria-hidden="true"
-      >
-        {initials}
-      </div>
+      {contact.avatar_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={contact.avatar_url}
+          alt={displayName}
+          className="h-10 w-10 shrink-0 rounded-full object-cover border border-border/40"
+          aria-hidden="true"
+        />
+      ) : (
+        <div
+          className={cn(
+            "h-10 w-10 shrink-0 rounded-full flex items-center justify-center",
+            "bg-primary/10 text-primary font-mono text-xs font-semibold select-none",
+          )}
+          aria-hidden="true"
+        >
+          {initials}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-w-0 space-y-0.5">
@@ -83,6 +107,7 @@ export function ConversationItem({
             {displayName}
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
+            <ChannelBadge channel={channel} size="sm" />
             <StateBadge state={conversation.state as ConversationState} />
             <span
               className="text-xs text-muted-foreground"
@@ -108,9 +133,11 @@ export function ConversationItem({
           )}
         </div>
 
-        <p className="font-mono text-[10px] text-muted-foreground/60">
-          {contact.phone}
-        </p>
+        {subIdentifier && (
+          <p className="font-mono text-[10px] text-muted-foreground/60 truncate">
+            {subIdentifier}
+          </p>
+        )}
       </div>
     </button>
   );

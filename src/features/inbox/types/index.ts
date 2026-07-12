@@ -1,3 +1,5 @@
+export type ConversationChannel = "whatsapp" | "facebook" | "instagram";
+
 export type ConversationState =
   | "ai_active"
   | "human_active"
@@ -24,7 +26,14 @@ export type MessageType =
 export interface ContactRow {
   id: string;
   workspace_id: string;
-  phone: string;
+  /** E.164 phone — WhatsApp identity. NULL for Meta (Messenger/Instagram) contacts. */
+  phone: string | null;
+  /** Channel this contact belongs to (contacts are channel-scoped). */
+  channel: ConversationChannel;
+  /** PSID (facebook) or IGSID (instagram). NULL for WhatsApp contacts. */
+  external_id: string | null;
+  /** Profile picture URL (Meta profile enrichment). */
+  avatar_url: string | null;
   name: string | null;
   email: string | null;
   stage: string | null;
@@ -38,7 +47,7 @@ export interface ConversationRow {
   id: string;
   workspace_id: string;
   contact_id: string;
-  channel: string;
+  channel: ConversationChannel;
   state: ConversationState;
   ai_enabled: boolean;
   assigned_to: string | null;

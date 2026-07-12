@@ -54,7 +54,7 @@ export interface HLContact {
 interface ContactRow {
   id: string;
   name: string | null;
-  phone: string;
+  phone: string | null;
   email: string | null;
   tags: string[] | null;
   hl_contact_id: string | null;
@@ -201,6 +201,14 @@ export async function syncContactToHL(
   }
 
   const contact = contactData as ContactRow;
+
+  // HighLevel dedup is phone-keyed — Meta (Messenger/Instagram) contacts have
+  // no phone number, so they are never synced to the CRM.
+  if (!contact.phone) {
+    console.warn("[HL] syncContactToHL: contact has no phone, skipping");
+    return null;
+  }
+
   const { firstName, lastName } = splitName(contact.name);
 
   // Create (with locationId) or update by hl_contact_id.
@@ -428,6 +436,11 @@ export async function createHLOpportunity(
   // phone (and persist it so future syncs find it).
   let hlContactId = contact.hl_contact_id;
   if (!hlContactId) {
+    // HL upsert is phone-keyed — phoneless (Meta) contacts can't be created.
+    if (!contact.phone) {
+      console.warn("[HL] createHLOpportunity: contact has no phone, skipping");
+      return null;
+    }
     hlContactId = await upsertHLContactByPhone(cfg, {
       name: contact.name,
       phone: contact.phone,
@@ -448,7 +461,7 @@ export async function createHLOpportunity(
     return null;
   }
 
-  const name = opts?.name?.trim() || contact.name || contact.phone;
+  const name = opts?.name?.trim() || contact.name || contact.phone || "Contacto";
 
   const payload: Record<string, unknown> = {
     pipelineId: cfg.pipelineId,

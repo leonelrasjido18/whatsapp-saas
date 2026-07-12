@@ -8,7 +8,15 @@ function svc() {
 }
 
 const ALLOWED_YCLOUD_HOST = "api.ycloud.com";
+/** Meta attachment CDNs (pre-signed URLs, no auth header needed) */
+const ALLOWED_META_HOST_SUFFIXES = [
+  ".fbsbx.com",
+  ".fbcdn.net",
+  ".cdninstagram.com",
+];
 const BUCKET = "whatsapp-media";
+
+export type MediaSource = "ycloud" | "meta";
 
 /** MIME type → file extension map */
 const MIME_EXTENSIONS: Record<string, string> = {
@@ -55,10 +63,12 @@ export interface MediaMeta {
 }
 
 export interface DownloadAndStoreOptions {
-  /** YCloud direct download URL (must be on api.ycloud.com — SEC-08) */
+  /** Provider download URL (host allowlisted per source — SEC-08) */
   link: string;
-  /** YCloud workspace API key — sent as X-API-Key header */
-  apiKey: string;
+  /** Provider of the URL — decides host allowlist + auth (default 'ycloud') */
+  source?: MediaSource;
+  /** YCloud workspace API key — sent as X-API-Key header (ycloud only) */
+  apiKey?: string;
   /** Forge workspace ID used as first path segment in storage */
   workspaceId: string;
   /** Conversation ID used as second path segment in storage */
@@ -74,15 +84,29 @@ export interface DownloadAndStoreOptions {
 }
 
 /**
- * SEC-08: Validates that the URL host is exactly api.ycloud.com.
- * Returns false on any parse error.
+ * SEC-08: Validates the URL host against the allowlist for its source —
+ * api.ycloud.com for YCloud; Meta's pre-signed CDNs (lookaside.fbsbx.com,
+ * *.fbcdn.net, *.cdninstagram.com) for Messenger/Instagram attachments.
+ * HTTPS only. Returns false on any parse error.
  */
-export function validateYCloudUrl(url: string): boolean {
+export function validateMediaUrl(url: string, source: MediaSource): boolean {
   try {
-    return new URL(url).hostname === ALLOWED_YCLOUD_HOST;
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    if (source === "ycloud") {
+      return parsed.hostname === ALLOWED_YCLOUD_HOST;
+    }
+    return ALLOWED_META_HOST_SUFFIXES.some((suffix) =>
+      parsed.hostname.endsWith(suffix),
+    );
   } catch {
     return false;
   }
+}
+
+/** Back-compat alias for the original YCloud-only validator. */
+export function validateYCloudUrl(url: string): boolean {
+  return validateMediaUrl(url, "ycloud");
 }
 
 /**
@@ -99,20 +123,24 @@ export function validateYCloudUrl(url: string): boolean {
 export async function downloadAndStoreMedia(
   opts: DownloadAndStoreOptions,
 ): Promise<MediaMeta | null> {
-  // SEC-08: block requests to non-YCloud hosts
-  if (!validateYCloudUrl(opts.link)) {
+  const source = opts.source ?? "ycloud";
+
+  // SEC-08: block requests to hosts outside the provider allowlist
+  if (!validateMediaUrl(opts.link, source)) {
     console.error(
-      "[media-handler] SEC-08 violation — URL host is not api.ycloud.com:",
+      `[media-handler] SEC-08 violation — URL host not allowed for ${source}:`,
       opts.link,
     );
     return null;
   }
 
-  // Download from YCloud
+  // Download from the provider. YCloud needs the workspace API key; Meta CDN
+  // URLs are pre-signed and take no auth header.
   let response: Response;
   try {
     response = await fetch(opts.link, {
-      headers: { "X-API-Key": opts.apiKey },
+      headers:
+        source === "ycloud" ? { "X-API-Key": opts.apiKey ?? "" } : undefined,
     });
   } catch (err) {
     console.error("[media-handler] fetch failed:", err);
@@ -121,7 +149,7 @@ export async function downloadAndStoreMedia(
 
   if (!response.ok) {
     console.error(
-      `[media-handler] YCloud download returned ${response.status} for ${opts.link}`,
+      `[media-handler] ${source} download returned ${response.status} for ${opts.link}`,
     );
     return null;
   }

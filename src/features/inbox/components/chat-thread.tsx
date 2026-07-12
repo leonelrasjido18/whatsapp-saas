@@ -28,6 +28,7 @@ import { AiToggleButton } from "./ai-toggle-button";
 import { ChatMessage } from "./chat-message";
 import { WindowBanner } from "./window-banner";
 import { TemplatePicker } from "./template-picker";
+import { ChannelBadge } from "./channel-badge";
 import { CrmPanel } from "./crm-panel";
 import { ObservabilityPanel } from "./observability-panel";
 import { RoleGate } from "./role-gate";
@@ -198,11 +199,23 @@ export function ChatThread({
           )}
         >
           <div className="space-y-0.5 min-w-0">
-            <h2 className="font-display text-sm font-semibold text-foreground truncate">
-              {conversation.contact.name ?? conversation.contact.phone}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-sm font-semibold text-foreground truncate">
+                {conversation.contact.name ??
+                  conversation.contact.phone ??
+                  (conversation.contact.channel === "instagram"
+                    ? "Usuario de Instagram"
+                    : conversation.contact.channel === "facebook"
+                      ? "Usuario de Messenger"
+                      : "Usuario")}
+              </h2>
+              <ChannelBadge channel={conversation.contact.channel ?? "whatsapp"} size="sm" />
+            </div>
             <p className="font-mono text-[10px] text-muted-foreground">
-              {conversation.contact.phone}
+              {conversation.contact.phone ??
+                (conversation.contact.external_id
+                  ? `ID: ${conversation.contact.external_id}`
+                  : "")}
             </p>
           </div>
 
@@ -304,6 +317,7 @@ export function ChatThread({
 
         <WindowBanner
           windowExpiresAt={conversation.window_expires_at ?? null}
+          channel={conversation.contact.channel ?? "whatsapp"}
         />
 
         {/* Message list */}
@@ -335,10 +349,16 @@ export function ChatThread({
           )}
         >
           {isWindowExpired ? (
-            <TemplatePicker
-              conversationId={conversation.id}
-              workspaceId={conversation.workspace_id}
-            />
+            (conversation.contact.channel ?? "whatsapp") === "whatsapp" ? (
+              <TemplatePicker
+                conversationId={conversation.id}
+                workspaceId={conversation.workspace_id}
+              />
+            ) : (
+              <p className="py-2 text-center text-xs text-muted-foreground/60 select-none">
+                La ventana de 24 horas expiró. Podrás responder cuando el cliente vuelva a escribir.
+              </p>
+            )
           ) : !canSendMessages(role) ? (
             <p className="py-2 text-center text-xs text-muted-foreground/60 select-none">
               Solo lectura — sin permisos para enviar mensajes

@@ -170,9 +170,12 @@ export function CrmPanel({
             {/* Avatar + phone */}
             <div className="flex items-center gap-3">
               <Initials name={name || contact.name} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] text-muted-foreground font-mono truncate">
-                  {contact.phone}
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="text-[10px] text-muted-foreground font-mono truncate" title={contact.phone ?? contact.external_id ?? undefined}>
+                  {contact.phone ?? (contact.external_id ? `ID: ${contact.external_id}` : "Sin identificador")}
+                </p>
+                <p className="text-[9px] uppercase font-bold tracking-wider text-muted-foreground/60">
+                  Canal: {contact.channel ?? "whatsapp"}
                 </p>
               </div>
             </div>
@@ -207,12 +210,12 @@ export function CrmPanel({
             {/* Opt-in switch */}
             <div className="flex items-center justify-between">
               <Label className="text-[10px] text-[hsl(var(--electric-lime))] uppercase tracking-wider">
-                WhatsApp Opt-in
+                {contact.channel === "whatsapp" ? "WhatsApp Opt-in" : "Opt-in"}
               </Label>
               <Switch
                 checked={optIn}
                 onCheckedChange={setOptIn}
-                aria-label="WhatsApp Opt-in"
+                aria-label={contact.channel === "whatsapp" ? "WhatsApp Opt-in" : "Opt-in"}
               />
             </div>
           </div>
@@ -311,7 +314,8 @@ export function CrmPanel({
           size="sm"
           variant="outline"
           onClick={handleSyncHL}
-          disabled={isPending}
+          disabled={isPending || !contact.phone}
+          title={!contact.phone ? "HighLevel requiere un número de teléfono para la sincronización" : undefined}
           className="w-full h-7 text-xs gap-1.5"
         >
           <RefreshCw className="h-3.5 w-3.5" />

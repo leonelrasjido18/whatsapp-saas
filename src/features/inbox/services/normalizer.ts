@@ -1,6 +1,10 @@
 import { createClient as createSbClient } from "@supabase/supabase-js";
-import type { NormalizedInbound } from "./ycloud-webhook-handler";
-import type { ContactRow, ConversationRow, MessageRow } from "../types/index";
+import type {
+  ContactRow,
+  ConversationChannel,
+  ConversationRow,
+  MessageRow,
+} from "../types/index";
 
 function svc() {
   return createSbClient(
@@ -31,6 +35,27 @@ export function normalizePhone(
   return `+${digits}`;
 }
 
+/**
+ * Channel-scoped contact identity:
+ * - WhatsApp contacts are keyed by E.164 phone (workspace_id + phone).
+ * - Meta contacts are keyed by PSID/IGSID (workspace_id + channel + external_id).
+ */
+export type InboundIdentity =
+  | { kind: "phone"; phone: string }
+  | { kind: "external"; externalId: string };
+
+export interface ProcessInboundParams {
+  channel: ConversationChannel;
+  identity: InboundIdentity;
+  /** Display name when the provider sends one (YCloud customerProfile); null otherwise */
+  profileName: string | null;
+  /** message_type enum value */
+  type: string;
+  text: string | null;
+  /** Provider message id (WhatsApp wamid / Meta mid) — dedup key, stored in messages.wamid */
+  providerMessageId: string;
+}
+
 export interface ProcessInboundResult {
   contact: ContactRow;
   conversation: ConversationRow;
@@ -40,52 +65,74 @@ export interface ProcessInboundResult {
 /**
  * Persists an inbound message and its related contact/conversation records.
  *
- * - Upserts the contact (by workspace_id + phone).
+ * - Upserts the contact (by workspace_id + phone, or workspace_id + channel +
+ *   external_id for Meta channels).
  * - Upserts the conversation (by workspace_id + contact_id + channel),
  *   incrementing unread_count and refreshing last_message_at.
  * - Inserts the message, deduplicating on workspace_id + wamid.
- *   Returns message: null when the wamid already exists.
+ *   Returns message: null when the provider message id already exists.
  */
 export async function processInbound(
   workspaceId: string,
-  normalized: NormalizedInbound,
+  params: ProcessInboundParams,
 ): Promise<ProcessInboundResult> {
   const supabase = svc();
-
-  // Per-workspace default country code for numbers without one.
-  const { data: biRow } = await supabase
-    .from("business_info")
-    .select("structured")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-  const defaultCc =
-    ((biRow?.structured as { default_country_code?: string } | null)
-      ?.default_country_code as string) ?? DEFAULT_COUNTRY_CODE;
-
-  const phone = normalizePhone(normalized.from, defaultCc);
 
   // 1. Upsert contact
   // A user messaging the business first is implicit opt-in for service
   // messages within the 24h window, so inbound contacts are opted in.
   // (STOP-keyword opt-out handling is future work and would guard this.)
-  const { data: contactData, error: contactError } = await supabase
-    .from("contacts")
-    .upsert(
-      {
-        workspace_id: workspaceId,
-        phone,
-        // Only update name when the incoming value is non-null
-        name: normalized.customerName,
-        opt_in: true,
-        opt_in_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "workspace_id,phone",
-        ignoreDuplicates: false,
-      },
-    )
-    .select()
-    .single();
+  // Only send `name` when the provider gave one — an unconditional null would
+  // wipe operator-set or enriched names on every inbound.
+  const contactBase: Record<string, unknown> = {
+    workspace_id: workspaceId,
+    channel: params.channel,
+    opt_in: true,
+    opt_in_at: new Date().toISOString(),
+    ...(params.profileName ? { name: params.profileName } : {}),
+  };
+
+  let contactUpsert;
+  if (params.identity.kind === "phone") {
+    // Per-workspace default country code for numbers without one.
+    const { data: biRow } = await supabase
+      .from("business_info")
+      .select("structured")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    const defaultCc =
+      ((biRow?.structured as { default_country_code?: string } | null)
+        ?.default_country_code as string) ?? DEFAULT_COUNTRY_CODE;
+
+    contactUpsert = await supabase
+      .from("contacts")
+      .upsert(
+        {
+          ...contactBase,
+          phone: normalizePhone(params.identity.phone, defaultCc),
+        },
+        { onConflict: "workspace_id,phone", ignoreDuplicates: false },
+      )
+      .select()
+      .single();
+  } else {
+    contactUpsert = await supabase
+      .from("contacts")
+      .upsert(
+        {
+          ...contactBase,
+          external_id: params.identity.externalId,
+        },
+        {
+          onConflict: "workspace_id,channel,external_id",
+          ignoreDuplicates: false,
+        },
+      )
+      .select()
+      .single();
+  }
+
+  const { data: contactData, error: contactError } = contactUpsert;
 
   if (contactError || !contactData) {
     throw new Error(
@@ -95,7 +142,8 @@ export async function processInbound(
 
   const contact = contactData as ContactRow;
 
-  // 2. Upsert conversation — reset 24h window on every inbound
+  // 2. Upsert conversation — reset 24h window on every inbound.
+  // (Meta's standard messaging window is also 24h from the last user message.)
   const windowExpiresAt = new Date(
     Date.now() + 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -106,7 +154,7 @@ export async function processInbound(
       {
         workspace_id: workspaceId,
         contact_id: contact.id,
-        channel: "whatsapp",
+        channel: params.channel,
         last_message_at: new Date().toISOString(),
         window_expires_at: windowExpiresAt,
         unread_count: 1,
@@ -127,7 +175,7 @@ export async function processInbound(
 
   const conversation = convData as ConversationRow;
 
-  // 3. Insert message — deduplicate on wamid
+  // 3. Insert message — deduplicate on provider message id
   const { data: msgData, error: msgError } = await supabase
     .from("messages")
     .upsert(
@@ -135,11 +183,11 @@ export async function processInbound(
         workspace_id: workspaceId,
         conversation_id: conversation.id,
         direction: "in" as const,
-        type: normalized.type,
-        body: normalized.text,
-        wamid: normalized.wamid,
+        type: params.type,
+        body: params.text,
+        wamid: params.providerMessageId,
         status: "delivered",
-        meta: { from_name: normalized.customerName },
+        meta: params.profileName ? { from_name: params.profileName } : {},
       },
       {
         onConflict: "workspace_id,wamid",
@@ -155,18 +203,6 @@ export async function processInbound(
   }
 
   const message = msgData ? (msgData as MessageRow) : null;
-
-  // F8-D1: media download hooks in here when message.type !== 'text' and message is not a dedup.
-  // The webhook handler extracts the media `link` from the raw YCloud payload and passes it
-  // alongside the NormalizedInbound. Once available, the call pattern is:
-  //
-  //   if (message && normalized.mediaLink && normalized.type !== 'text') {
-  //     void downloadAndStoreMedia({ link: normalized.mediaLink, apiKey, workspaceId, ... })
-  //       .then((meta) => meta && patchMessageMedia(workspaceId, message.id, meta))
-  //   }
-  //
-  // See media-handler.ts for downloadAndStoreMedia() and patchMessageMedia().
-  // NormalizedInbound extension (mediaLink field) + webhook wiring is D2 scope.
 
   return { contact, conversation, message };
 }

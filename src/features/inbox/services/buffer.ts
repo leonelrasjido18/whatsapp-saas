@@ -4,6 +4,9 @@ import { recordLlmUsage } from "./cost-tracker";
 import { dispatchText, dispatchTemplate } from "./dispatch";
 import { decide, applyTransition } from "./decision-engine";
 import { sendTypingIndicator } from "./ycloud-client";
+import { sendSenderAction } from "./meta-client";
+import { getMetaIntegration } from "./meta-integration";
+import type { ConversationChannel } from "../types/index";
 import type { ToolContext } from "@/features/tools/core/tool";
 import { resolveSystemPrompt } from "./prompt-resolver";
 import { buildSystemPrompt } from "./prompt-builder";
@@ -291,7 +294,7 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     // ── 4. Load conversation record ─────────────────────────────────────────
     const { data: conversation, error: convError } = await supabase
       .from("conversations")
-      .select("id, workspace_id, contact_id, ai_enabled, summary")
+      .select("id, workspace_id, contact_id, channel, ai_enabled, summary")
       .eq("id", batch.conversation_id)
       .single();
 
@@ -323,17 +326,19 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     };
 
     // ── 6b. Resolve conversational memory window (WS2: configurable) ─────────
-    // The YCloud integration config carries message_history_window; clamp to
-    // [5, 50] and default to 10 when unset or non-numeric.
-    const { data: ycloudCfg } = await supabase
+    // The integration config (YCloud or Meta) carries message_history_window;
+    // clamp to [5, 50] and default to 10 when unset or non-numeric.
+    const convChannel = (conversation.channel ?? "whatsapp") as ConversationChannel;
+    const integrationProvider = convChannel === "whatsapp" ? "ycloud" : "meta";
+    const { data: channelCfg } = await supabase
       .from("integrations")
       .select("config")
       .eq("workspace_id", batch.workspace_id)
-      .eq("provider", "ycloud")
+      .eq("provider", integrationProvider)
       .eq("enabled", true)
       .maybeSingle();
     const rawWindow = Number(
-      (ycloudCfg?.config as { message_history_window?: number } | null)
+      (channelCfg?.config as { message_history_window?: number } | null)
         ?.message_history_window,
     );
     const historyWindow = Number.isFinite(rawWindow)
@@ -417,18 +422,17 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       return { processed: true, conversationId: batch.conversation_id };
     }
 
-    // ── 8. Load YCloud integration credentials ──────────────────────────────
-    const { data: integration, error: intError } = await supabase
+    // ── 8. Load integration for typing indicators ─────────────────────────────
+    // FIX: use .maybeSingle() — Meta conversations in workspaces without YCloud
+    // (and vice versa) must NOT throw here. Missing integration = no typing
+    // indicator, not a dead-letter.
+    const { data: ycloudIntegration } = await supabase
       .from("integrations")
       .select("credentials, config")
       .eq("workspace_id", batch.workspace_id)
       .eq("provider", "ycloud")
       .eq("enabled", true)
-      .single();
-
-    if (intError || !integration) {
-      throw new Error(`YCloud integration not found: ${intError?.message}`);
-    }
+      .maybeSingle();
 
     // ── 8a. Generate AI reply with tool-calling support ───────────────────────
     // Resolve workspace model (falls back to env default or gpt-4o-mini).
@@ -436,27 +440,35 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     const workspaceModel = await getWorkspaceModel(batch.workspace_id);
     const model = costModel ?? workspaceModel;
 
-    // ── 8b. Load contact phone for typing indicator ────────────────────────────
+    // ── 8b. Load contact for typing indicator ─────────────────────────────────
     const { data: contactRow } = await supabase
       .from("contacts")
-      .select("phone")
+      .select("phone, external_id")
       .eq("id", conversation.contact_id as string)
       .single();
-    const toPhone = (contactRow as { phone: string } | null)?.phone ?? "";
+    const toPhone = (contactRow as { phone: string | null } | null)?.phone ?? "";
+    const externalId = (contactRow as { external_id: string | null } | null)?.external_id ?? "";
 
-    // ── 8c. Load YCloud credentials for typing indicator ────────────────────────
-    const { credentials: ycloudCreds } = integration as {
-      credentials: Record<string, unknown>;
-    };
-    const yCloudApiKey =
-      (ycloudCreds?.ycloud_api_key as string | undefined) ?? "";
-    const fromPhone =
-      (ycloudCfg?.config as { phone_number?: string } | null)?.phone_number ??
-      "";
-
-    // ── 8d. Send typing ON indicator ──────────────────────────────────────────
-    if (yCloudApiKey && fromPhone && toPhone) {
-      await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, true);
+    // ── 8c. Send typing ON indicator (channel-branched) ──────────────────────
+    if (convChannel === "whatsapp") {
+      // WhatsApp typing via YCloud
+      const ycloudCreds = ycloudIntegration?.credentials as Record<string, unknown> | null;
+      const yCloudApiKey = (ycloudCreds?.ycloud_api_key as string | undefined) ?? "";
+      const fromPhone = (channelCfg?.config as { phone_number?: string } | null)?.phone_number ?? "";
+      if (yCloudApiKey && fromPhone && toPhone) {
+        await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, true);
+      }
+    } else {
+      // Meta typing via sender action
+      const metaIntegration = await getMetaIntegration(batch.workspace_id);
+      if (metaIntegration?.pageAccessToken && externalId) {
+        await sendSenderAction({
+          pageId: metaIntegration.pageId,
+          pageAccessToken: metaIntegration.pageAccessToken,
+          recipientId: externalId,
+          action: "typing_on",
+        });
+      }
     }
 
     const reply = await generateWithTools({
@@ -470,8 +482,23 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     });
 
     // ── 8e. Send typing OFF indicator ────────────────────────────────────────
-    if (yCloudApiKey && fromPhone && toPhone) {
-      await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, false);
+    if (convChannel === "whatsapp") {
+      const ycloudCreds = ycloudIntegration?.credentials as Record<string, unknown> | null;
+      const yCloudApiKey = (ycloudCreds?.ycloud_api_key as string | undefined) ?? "";
+      const fromPhone = (channelCfg?.config as { phone_number?: string } | null)?.phone_number ?? "";
+      if (yCloudApiKey && fromPhone && toPhone) {
+        await sendTypingIndicator(yCloudApiKey, fromPhone, toPhone, false);
+      }
+    } else {
+      const metaIntegration = await getMetaIntegration(batch.workspace_id);
+      if (metaIntegration?.pageAccessToken && externalId) {
+        await sendSenderAction({
+          pageId: metaIntegration.pageId,
+          pageAccessToken: metaIntegration.pageAccessToken,
+          recipientId: externalId,
+          action: "typing_off",
+        });
+      }
     }
 
     // ── 8f. Record LLM usage ─────────────────────────────────────────────────

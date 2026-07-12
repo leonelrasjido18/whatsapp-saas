@@ -42,3 +42,65 @@ export function formatWhatsAppMarkdown(text: string): string {
 
   return out;
 }
+
+/**
+ * Strips Markdown formatting to plain text for channels that don't render it
+ * (Facebook Messenger, Instagram DM). Preserves readability:
+ *   **bold** / __bold__       → bold
+ *   _italic_                  → italic (just removes underscores)
+ *   ~~strike~~                → strike
+ *   [text](url)               → text (url)
+ *   # Heading                 → Heading
+ *   ```code blocks```         → code blocks
+ *   `inline code`             → inline code
+ *   * / + bullets             → - bullets
+ *   Collapses >2 consecutive newlines to 2.
+ */
+export function formatPlainText(text: string): string {
+  if (!text) return text;
+
+  let out = text;
+
+  // 1. Fenced code blocks: ```lang\ncode\n``` → code (keep content)
+  out = out.replace(/```[\s\S]*?\n([\s\S]*?)```/g, "$1");
+  // Also handle inline triple backtick: ```text``` → text
+  out = out.replace(/```(.+?)```/g, "$1");
+
+  // 2. Inline code: `text` → text
+  out = out.replace(/`([^`]+)`/g, "$1");
+
+  // 3. Headings: "## Title" → "Title"
+  out = out.replace(/^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*#*$/gm, "$1");
+
+  // 4. Bold: **text** / __text__ → text
+  out = out.replace(/\*\*(?=\S)([\s\S]+?)\*\*/g, "$1");
+  out = out.replace(/__(?=\S)([\s\S]+?)__/g, "$1");
+
+  // 5. Italic: *text* (single) → text — run after bold removal so double-star
+  //    is already gone and *text* won't match mid-word false positives.
+  //    Only match when preceded/followed by whitespace or line boundary to avoid
+  //    clobbering legitimate asterisks in things like "5 * 3".
+  out = out.replace(/(?<=^|[\s(])\*(?=\S)([\s\S]+?)\*(?=$|[\s).,!?;:])/gm, "$1");
+  // Underscored italic: _text_ → text
+  out = out.replace(/(?<=^|[\s(])_(?=\S)([\s\S]+?)_(?=$|[\s).,!?;:])/gm, "$1");
+
+  // 6. Strikethrough: ~~text~~ → text
+  out = out.replace(/~~(?=\S)([\s\S]+?)~~/g, "$1");
+
+  // 7. Markdown links: [text](url) → "text (url)"
+  out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, "$1 ($2)");
+
+  // 8. Bullet lists: leading "* " or "+ " → "- "
+  out = out.replace(/^([ \t]*)[*+][ \t]+/gm, "$1- ");
+
+  // 9. Blockquotes: "> text" → "text"
+  out = out.replace(/^[ \t]*>[ \t]?/gm, "");
+
+  // 10. Horizontal rules: ---, ***, ___ on their own line → empty
+  out = out.replace(/^[ \t]*[-*_]{3,}[ \t]*$/gm, "");
+
+  // 11. Collapse excessive newlines (>2 consecutive → 2)
+  out = out.replace(/\n{3,}/g, "\n\n");
+
+  return out.trim();
+}

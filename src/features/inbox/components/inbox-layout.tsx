@@ -14,12 +14,20 @@ import type {
 } from "@/features/inbox/types";
 
 type FilterTab = "all" | "ai_active" | "human_active" | "handoff_pending";
+type ChannelFilter = "all" | "whatsapp" | "facebook" | "instagram";
 
 const TABS: { id: FilterTab; label: string }[] = [
   { id: "all", label: "Todos" },
   { id: "ai_active", label: "IA activa" },
   { id: "human_active", label: "Humano" },
   { id: "handoff_pending", label: "Handoff" },
+];
+
+const CHANNEL_FILTERS: { id: ChannelFilter; label: string }[] = [
+  { id: "all", label: "Todos" },
+  { id: "whatsapp", label: "WhatsApp" },
+  { id: "facebook", label: "Messenger" },
+  { id: "instagram", label: "Instagram" },
 ];
 
 interface InboxLayoutProps {
@@ -37,6 +45,7 @@ export function InboxLayout({
   const pathname = usePathname();
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [activeChannel, setActiveChannel] = useState<ChannelFilter>("all");
 
   // Live-update the list when chats arrive/change (new conversation, new
   // message, state/handoff change) — re-runs the server component.
@@ -48,15 +57,20 @@ export function InboxLayout({
       const matchesSearch =
         q === "" ||
         (c.contact.name ?? "").toLowerCase().includes(q) ||
-        c.contact.phone.toLowerCase().includes(q);
+        (c.contact.phone ?? "").toLowerCase().includes(q) ||
+        (c.contact.external_id ?? "").toLowerCase().includes(q);
 
       const matchesTab =
         activeTab === "all" ||
         (c.state as ConversationState) === (activeTab as ConversationState);
 
-      return matchesSearch && matchesTab;
+      const matchesChannel =
+        activeChannel === "all" ||
+        (c.contact.channel ?? "whatsapp") === activeChannel;
+
+      return matchesSearch && matchesTab && matchesChannel;
     });
-  }, [conversations, search, activeTab]);
+  }, [conversations, search, activeTab, activeChannel]);
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -87,37 +101,71 @@ export function InboxLayout({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o teléfono..."
+              placeholder="Buscar por nombre, tel o ID..."
               className="pl-8 h-8 text-xs bg-muted/30 border-border/40 placeholder:text-muted-foreground/50"
               aria-label="Buscar conversaciones"
             />
           </div>
 
+          {/* Channel filter chips */}
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/60">
+              Canal
+            </p>
+            <div
+              role="tablist"
+              aria-label="Filtrar por canal"
+              className="flex gap-1 flex-wrap"
+            >
+              {CHANNEL_FILTERS.map((filter) => (
+                <Button
+                  key={filter.id}
+                  type="button"
+                  size="sm"
+                  onClick={() => setActiveChannel(filter.id)}
+                  className={cn(
+                    "h-5 px-2 text-[10px] rounded-md transition-colors border",
+                    activeChannel === filter.id
+                      ? "bg-primary text-primary-foreground border-primary font-medium"
+                      : "bg-background text-muted-foreground border-border/40 hover:text-foreground hover:bg-muted/40",
+                  )}
+                >
+                  {filter.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           {/* Status filter tabs */}
-          <div
-            role="tablist"
-            aria-label="Filtrar por estado"
-            className="flex gap-1 flex-wrap"
-          >
-            {TABS.map((tab) => (
-              <Button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                variant="ghost"
-                size="sm"
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "h-6 px-2 text-[11px] rounded-md transition-colors",
-                  activeTab === tab.id
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
-                )}
-              >
-                {tab.label}
-              </Button>
-            ))}
+          <div className="space-y-1 pt-1">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/60">
+              Estado
+            </p>
+            <div
+              role="tablist"
+              aria-label="Filtrar por estado"
+              className="flex gap-1 flex-wrap"
+            >
+              {TABS.map((tab) => (
+                <Button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "h-5 px-2 text-[10px] rounded-md transition-colors border",
+                    activeTab === tab.id
+                      ? "bg-primary/10 text-primary border-primary/20 font-medium"
+                      : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/40",
+                  )}
+                >
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -125,14 +173,14 @@ export function InboxLayout({
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
               <p className="text-sm text-muted-foreground">
-                {search || activeTab !== "all"
+                {search || activeTab !== "all" || activeChannel !== "all"
                   ? "Sin resultados"
                   : "No hay conversaciones"}
               </p>
               <p className="text-xs text-muted-foreground/60 mt-1">
-                {search || activeTab !== "all"
+                {search || activeTab !== "all" || activeChannel !== "all"
                   ? "Intenta con otro filtro o búsqueda"
-                  : "Los contactos de WhatsApp aparecerán aquí"}
+                  : "Los contactos aparecerán aquí"}
               </p>
             </div>
           ) : (

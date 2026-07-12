@@ -3,12 +3,17 @@
  *
  * ONLY dispatchText and dispatchTemplate should call sendText / sendTemplate.
  * No other module should invoke those functions directly for user-facing sends.
+ *
+ * Channel-aware: routes to YCloud (WhatsApp) or Meta Graph API (Messenger/IG).
  */
 
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { sendText, sendTemplate } from "./ycloud-client";
 import type { TemplateParams } from "./ycloud-client";
-import { formatWhatsAppMarkdown } from "./text-formatter";
+import { sendMetaText, isAuthError } from "./meta-client";
+import { getMetaIntegration, flagMetaReconnectRequired } from "./meta-integration";
+import { formatWhatsAppMarkdown, formatPlainText } from "./text-formatter";
+import type { ConversationChannel } from "../types/index";
 
 function svc() {
   return createSbClient(
@@ -56,16 +61,63 @@ interface IntegrationRow {
   config: Record<string, unknown>;
 }
 
-interface ContactPhoneRow {
-  phone: string;
+/** Unified send context — one query replaces the old 3-query approach. */
+interface SendContext {
+  channel: ConversationChannel;
+  windowExpiresAt: string | null;
+  contactId: string;
+  /** E.164 phone for WhatsApp; null for Meta contacts */
+  phone: string | null;
+  /** PSID (FB) / IGSID (IG) for Meta contacts; null for WhatsApp */
+  externalId: string | null;
+  optIn: boolean;
 }
 
-interface ConversationWindowRow {
-  window_expires_at: string | null;
-  contact_id: string;
+/**
+ * Loads all the context needed to send a message in a single join query.
+ * Replaces the old loadConversationAndPhone + two redundant opt-out queries.
+ */
+async function loadSendContext(
+  conversationId: string,
+  supabase: ReturnType<typeof svc>,
+): Promise<SendContext> {
+  const { data: conv, error: convError } = await supabase
+    .from("conversations")
+    .select(
+      "window_expires_at, channel, contact:contacts(id, phone, external_id, opt_in)",
+    )
+    .eq("id", conversationId)
+    .single();
+
+  if (convError || !conv) {
+    throw new Error(`[dispatch] conversation not found: ${convError?.message}`);
+  }
+
+  // supabase-js returns the joined row as an object (single FK → !inner by default)
+  const contact = conv.contact as unknown as {
+    id: string;
+    phone: string | null;
+    external_id: string | null;
+    opt_in: boolean;
+  } | null;
+
+  if (!contact) {
+    throw new Error(
+      `[dispatch] contact not found for conversation ${conversationId}`,
+    );
+  }
+
+  return {
+    channel: conv.channel as ConversationChannel,
+    windowExpiresAt: conv.window_expires_at as string | null,
+    contactId: contact.id,
+    phone: contact.phone,
+    externalId: contact.external_id,
+    optIn: contact.opt_in,
+  };
 }
 
-async function loadIntegration(
+async function loadYCloudIntegration(
   workspaceId: string,
   supabase: ReturnType<typeof svc>,
 ): Promise<{ apiKey: string; fromPhone: string }> {
@@ -90,38 +142,6 @@ async function loadIntegration(
   };
 }
 
-async function loadConversationAndPhone(
-  conversationId: string,
-  supabase: ReturnType<typeof svc>,
-): Promise<{ window_expires_at: string | null; toPhone: string }> {
-  const { data: conv, error: convError } = await supabase
-    .from("conversations")
-    .select("window_expires_at, contact_id")
-    .eq("id", conversationId)
-    .single();
-
-  if (convError || !conv) {
-    throw new Error(`[dispatch] conversation not found: ${convError?.message}`);
-  }
-
-  const convRow = conv as ConversationWindowRow;
-
-  const { data: contact, error: contactError } = await supabase
-    .from("contacts")
-    .select("phone")
-    .eq("id", convRow.contact_id)
-    .single();
-
-  if (contactError || !contact) {
-    throw new Error(`[dispatch] contact not found: ${contactError?.message}`);
-  }
-
-  return {
-    window_expires_at: convRow.window_expires_at,
-    toPhone: (contact as ContactPhoneRow).phone,
-  };
-}
-
 // ──────────────────────────────────────────────────────────────────────────────
 // dispatchText — sends a free-text outbound message
 // ──────────────────────────────────────────────────────────────────────────────
@@ -136,118 +156,179 @@ export async function dispatchText(
     overrideAdmin = false,
   } = params;
 
-  // Normalise Markdown → WhatsApp formatting (e.g. **bold** → *bold*) once, so
-  // both the YCloud send and the persisted message match what the user receives.
-  const body = formatWhatsAppMarkdown(rawBody);
-
   const supabase = svc();
 
-  // 1. Load conversation window + contact phone
-  const { window_expires_at, toPhone } = await loadConversationAndPhone(
-    conversationId,
-    supabase,
-  );
+  // 1. Load conversation + contact in one query
+  const ctx = await loadSendContext(conversationId, supabase);
+
+  // Format text per channel: WhatsApp gets *bold* syntax, Meta gets plain text
+  const isMeta = ctx.channel === "facebook" || ctx.channel === "instagram";
+  const body = isMeta ? formatPlainText(rawBody) : formatWhatsAppMarkdown(rawBody);
 
   // SEC-10: Block outbound to opted-out contacts
-  const { data: convRow } = await supabase
-    .from("conversations")
-    .select("contact_id")
-    .eq("id", conversationId)
-    .single();
-
-  if (convRow) {
-    const { data: contactOptData } = await supabase
-      .from("contacts")
-      .select("opt_in")
-      .eq("id", (convRow as { contact_id: string }).contact_id)
-      .single();
-
-    if (
-      contactOptData &&
-      (contactOptData as { opt_in: boolean }).opt_in === false
-    ) {
-      return {
-        ok: false,
-        error: "OPT_OUT: contact has opted out of WhatsApp messages",
-      };
-    }
+  if (!ctx.optIn) {
+    return {
+      ok: false,
+      error: "OPT_OUT: contact has opted out of messages",
+    };
   }
 
   // 2. App-level 24h window guard (DB trigger is the final enforcer)
   if (
-    window_expires_at !== null &&
-    new Date() > new Date(window_expires_at) &&
+    ctx.windowExpiresAt !== null &&
+    new Date() > new Date(ctx.windowExpiresAt) &&
     !overrideAdmin
   ) {
     return { ok: false, error: "WINDOW_EXPIRED" };
   }
 
-  // 3. Load YCloud credentials
-  const { apiKey, fromPhone } = await loadIntegration(workspaceId, supabase);
-
-  // 4. Send via YCloud (skip if placeholder / dev mode)
-  // YCloud returns its own `id` synchronously and assigns the WhatsApp `wamid`
-  // asynchronously (delivered via a status webhook). A 2xx response means the
-  // message was accepted for delivery, even when `wamid` is still empty.
+  // 3. Channel-branched send
   let wamid: string | undefined;
-  let ycloudId: string | undefined;
-  const realSend = Boolean(apiKey && apiKey !== "placeholder");
 
-  if (realSend) {
-    try {
-      const sent = await sendText({
-        apiKey,
-        from: fromPhone,
-        to: toPhone,
-        body,
-      });
-      wamid = sent.wamid || undefined;
-      ycloudId = sent.id || undefined;
-    } catch (sendErr) {
-      const errMsg =
-        sendErr instanceof Error ? sendErr.message : String(sendErr);
-      console.error("[dispatch] YCloud sendText error:", errMsg);
-
-      // Persist failed message for audit
-      await supabase.from("messages").insert({
-        workspace_id: workspaceId,
-        conversation_id: conversationId,
-        direction: "out",
-        type: "text",
-        body,
-        status: "failed",
-        sender_user_id: senderUserId ?? null,
-        meta: { error: errMsg, override_admin: overrideAdmin || undefined },
-      });
-
-      return { ok: false, error: errMsg };
+  if (isMeta) {
+    // ── Meta (Facebook Messenger / Instagram DM) ─────────────────────────
+    const recipientId = ctx.externalId;
+    if (!recipientId) {
+      return { ok: false, error: "META_NO_EXTERNAL_ID" };
     }
-  }
 
-  // 5. Persist outbound message
-  // The DB trigger trg_messages_24h_window fires here — if override_admin is set
-  // and window is expired, the trigger logs WINDOW_OVERRIDE and allows the insert.
-  const { error: insertError } = await supabase.from("messages").insert({
-    workspace_id: workspaceId,
-    conversation_id: conversationId,
-    direction: "out",
-    type: "text",
-    body,
-    wamid: wamid ?? null,
-    // A real YCloud send is 'sent'; only a placeholder key stays a dev no-op.
-    status: realSend ? "sent" : "queued",
-    sender_user_id: senderUserId ?? null,
-    meta: {
-      dev_mode: realSend ? undefined : true,
-      ycloud_id: ycloudId,
-      override_admin: overrideAdmin || undefined,
-    },
-  });
+    const integration = await getMetaIntegration(workspaceId);
+    if (!integration) {
+      return { ok: false, error: "META_INTEGRATION_NOT_FOUND" };
+    }
 
-  if (insertError) {
-    // Surface DB trigger errors (WINDOW_EXPIRED raised by trigger)
-    console.error("[dispatch] message insert error:", insertError.message);
-    return { ok: false, error: insertError.message };
+    const realSend = Boolean(
+      integration.pageAccessToken &&
+        integration.pageAccessToken !== "placeholder",
+    );
+
+    if (realSend) {
+      try {
+        const result = await sendMetaText({
+          pageId: integration.pageId,
+          pageAccessToken: integration.pageAccessToken,
+          recipientId,
+          text: body,
+          channel: ctx.channel as "facebook" | "instagram",
+        });
+        wamid = result.mids[0] ?? undefined;
+      } catch (sendErr) {
+        const errMsg =
+          sendErr instanceof Error ? sendErr.message : String(sendErr);
+        console.error("[dispatch] Meta sendText error:", errMsg);
+
+        // Token expired/revoked → flag for reconnection banner
+        if (isAuthError(sendErr)) {
+          await flagMetaReconnectRequired(workspaceId).catch(() => {});
+        }
+
+        // Persist failed message for audit
+        await supabase.from("messages").insert({
+          workspace_id: workspaceId,
+          conversation_id: conversationId,
+          direction: "out",
+          type: "text",
+          body,
+          status: "failed",
+          sender_user_id: senderUserId ?? null,
+          meta: { error: errMsg, override_admin: overrideAdmin || undefined },
+        });
+
+        return { ok: false, error: errMsg };
+      }
+    }
+
+    // Persist outbound message
+    const { error: insertError } = await supabase.from("messages").insert({
+      workspace_id: workspaceId,
+      conversation_id: conversationId,
+      direction: "out",
+      type: "text",
+      body,
+      wamid: wamid ?? null,
+      status: realSend ? "sent" : "queued",
+      sender_user_id: senderUserId ?? null,
+      meta: {
+        dev_mode: realSend ? undefined : true,
+        override_admin: overrideAdmin || undefined,
+      },
+    });
+
+    if (insertError) {
+      console.error("[dispatch] message insert error:", insertError.message);
+      return { ok: false, error: insertError.message };
+    }
+  } else {
+    // ── WhatsApp (YCloud) ────────────────────────────────────────────────
+    const toPhone = ctx.phone;
+    if (!toPhone) {
+      return { ok: false, error: "WHATSAPP_NO_PHONE" };
+    }
+
+    const { apiKey, fromPhone } = await loadYCloudIntegration(
+      workspaceId,
+      supabase,
+    );
+
+    let ycloudId: string | undefined;
+    const realSend = Boolean(apiKey && apiKey !== "placeholder");
+
+    if (realSend) {
+      try {
+        const sent = await sendText({
+          apiKey,
+          from: fromPhone,
+          to: toPhone,
+          body,
+        });
+        wamid = sent.wamid || undefined;
+        ycloudId = sent.id || undefined;
+      } catch (sendErr) {
+        const errMsg =
+          sendErr instanceof Error ? sendErr.message : String(sendErr);
+        console.error("[dispatch] YCloud sendText error:", errMsg);
+
+        // Persist failed message for audit
+        await supabase.from("messages").insert({
+          workspace_id: workspaceId,
+          conversation_id: conversationId,
+          direction: "out",
+          type: "text",
+          body,
+          status: "failed",
+          sender_user_id: senderUserId ?? null,
+          meta: { error: errMsg, override_admin: overrideAdmin || undefined },
+        });
+
+        return { ok: false, error: errMsg };
+      }
+    }
+
+    // 5. Persist outbound message
+    // The DB trigger trg_messages_24h_window fires here — if override_admin is set
+    // and window is expired, the trigger logs WINDOW_OVERRIDE and allows the insert.
+    const { error: insertError } = await supabase.from("messages").insert({
+      workspace_id: workspaceId,
+      conversation_id: conversationId,
+      direction: "out",
+      type: "text",
+      body,
+      wamid: wamid ?? null,
+      // A real YCloud send is 'sent'; only a placeholder key stays a dev no-op.
+      status: realSend ? "sent" : "queued",
+      sender_user_id: senderUserId ?? null,
+      meta: {
+        dev_mode: realSend ? undefined : true,
+        ycloud_id: ycloudId,
+        override_admin: overrideAdmin || undefined,
+      },
+    });
+
+    if (insertError) {
+      // Surface DB trigger errors (WINDOW_EXPIRED raised by trigger)
+      console.error("[dispatch] message insert error:", insertError.message);
+      return { ok: false, error: insertError.message };
+    }
   }
 
   // 6. Refresh conversation last_message_at
@@ -276,33 +357,35 @@ export async function dispatchTemplate(
 
   const supabase = svc();
 
-  // 1. Load contact phone (templates bypass the window guard entirely)
-  const { toPhone } = await loadConversationAndPhone(conversationId, supabase);
+  // 1. Load send context
+  const ctx = await loadSendContext(conversationId, supabase);
+
+  // Templates are WhatsApp-only — Meta doesn't support them.
+  if (ctx.channel !== "whatsapp") {
+    return {
+      ok: false,
+      error: "TEMPLATES_UNSUPPORTED",
+    };
+  }
+
+  const toPhone = ctx.phone;
+  if (!toPhone) {
+    return { ok: false, error: "WHATSAPP_NO_PHONE" };
+  }
 
   // SEC-10: Block outbound to opted-out contacts
-  const { data: tplConvRow } = await supabase
-    .from("conversations")
-    .select("contact_id")
-    .eq("id", conversationId)
-    .single();
-
-  if (tplConvRow) {
-    const { data: tplOptData } = await supabase
-      .from("contacts")
-      .select("opt_in")
-      .eq("id", (tplConvRow as { contact_id: string }).contact_id)
-      .single();
-
-    if (tplOptData && (tplOptData as { opt_in: boolean }).opt_in === false) {
-      return {
-        ok: false,
-        error: "OPT_OUT: contact has opted out of WhatsApp messages",
-      };
-    }
+  if (!ctx.optIn) {
+    return {
+      ok: false,
+      error: "OPT_OUT: contact has opted out of WhatsApp messages",
+    };
   }
 
   // 2. Load YCloud credentials
-  const { apiKey, fromPhone } = await loadIntegration(workspaceId, supabase);
+  const { apiKey, fromPhone } = await loadYCloudIntegration(
+    workspaceId,
+    supabase,
+  );
 
   // 3. Send template via YCloud
   let wamid: string | undefined;

@@ -39,6 +39,9 @@ export interface ContactRow {
   stage: string | null;
   tags: string[] | null;
   opt_in: boolean;
+  customer_tier?: "new" | "regular" | "vip" | "inactive";
+  total_spent?: number;
+  last_purchase_at?: string;
   created_at: string;
   updated_at: string;
 }

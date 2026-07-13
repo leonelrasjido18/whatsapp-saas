@@ -23,6 +23,10 @@ export interface Plan {
     automation_rules: boolean;
     team_members: boolean;
     api_access: boolean;
+    catalog_sales: boolean;
+    ai_sales_tools: boolean;
+    merchant_payments: boolean;
+    invoicing: boolean;
   };
 }
 
@@ -42,6 +46,10 @@ export const PLANS: Record<PlanTier, Plan> = {
       automation_rules: false,
       team_members: true,
       api_access: false,
+      catalog_sales: true,
+      ai_sales_tools: false,
+      merchant_payments: false,
+      invoicing: false,
     },
   },
 
@@ -60,6 +68,10 @@ export const PLANS: Record<PlanTier, Plan> = {
       automation_rules: true, // Auto-tagging, automation
       team_members: true,
       api_access: false,
+      catalog_sales: true,
+      ai_sales_tools: true,
+      merchant_payments: true,
+      invoicing: true,
     },
   },
 
@@ -78,6 +90,10 @@ export const PLANS: Record<PlanTier, Plan> = {
       automation_rules: true,
       team_members: true,
       api_access: true, // Full API access for integrations
+      catalog_sales: true,
+      ai_sales_tools: true,
+      merchant_payments: true,
+      invoicing: true,
     },
   },
 };

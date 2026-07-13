@@ -251,9 +251,9 @@ async function cmdCronApply() {
   if (!r1.ok) fail(`No pude agendar el cron ${r1.status}: ${JSON.stringify(r1.data)}`);
   const r2 = await remoteSql(
     ref,
-    "select jobname, schedule, active from cron.job where jobname = 'buffer-flush';",
+    "select jobname, schedule, active from cron.job where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay');",
   );
-  ok("Cron buffer-flush agendado vía Management API.");
+  ok("Crons (buffer-flush, invoice-retry, tier-decay) agendados vía Management API.");
   log(`Verificación: ${JSON.stringify(r2.data)}`);
 }
 

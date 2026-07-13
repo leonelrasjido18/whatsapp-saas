@@ -25,8 +25,33 @@ select cron.schedule(
   $job$
 );
 
--- Verify it registered (expect one active row):
---   select jobname, schedule, active from cron.job where jobname = 'buffer-flush';
+-- Commerce: retry AFIP invoicing for paid orders without a CAE (hourly).
+select cron.schedule(
+  'invoice-retry',
+  '15 * * * *',            -- every hour at :15
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/invoice-retry',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Commerce: decay inactive customers to 'inactive' tier (daily 03:00 UTC = 00:00 ART).
+select cron.schedule(
+  'tier-decay',
+  '0 3 * * *',             -- daily at 03:00 UTC
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/tier-decay',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Verify they registered (expect three active rows):
+--   select jobname, schedule, active from cron.job
+--   where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay');
 --
 -- Inspect recent runs / failures:
 --   select status, return_message, start_time

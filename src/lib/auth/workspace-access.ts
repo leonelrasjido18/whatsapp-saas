@@ -12,6 +12,8 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSbClient } from "@supabase/supabase-js";
+import { hasFeature, type PlanTier, type Plan } from "@/features/billing/plans";
 
 export type WorkspaceRole = "admin" | "manager" | "agent" | "viewer";
 
@@ -84,6 +86,40 @@ export async function requireWorkspaceMember(
   }
 
   return { ok: true, userId: user.id, role };
+}
+
+/**
+ * Checks if the workspace has a specific feature enabled in its plan tier.
+ * Must be called AFTER requireWorkspaceMember.
+ */
+export async function requireWorkspaceFeature(
+  workspaceId: string,
+  feature: keyof Plan["features"],
+): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+  const svc = createSbClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  const { data } = await svc
+    .from("workspaces")
+    .select("plan_tier")
+    .eq("id", workspaceId)
+    .single();
+
+  const tier = (data?.plan_tier as PlanTier) ?? "starter";
+
+  if (!hasFeature(tier, feature)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: `Esta función requiere el plan adecuado. Característica requerida: ${feature}` },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return { ok: true };
 }
 
 type JsonOk<T> = { ok: true; body: T };

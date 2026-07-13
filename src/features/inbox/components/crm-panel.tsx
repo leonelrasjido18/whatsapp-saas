@@ -174,9 +174,21 @@ export function CrmPanel({
                 <p className="text-[10px] text-muted-foreground font-mono truncate" title={contact.phone ?? contact.external_id ?? undefined}>
                   {contact.phone ?? (contact.external_id ? `ID: ${contact.external_id}` : "Sin identificador")}
                 </p>
-                <p className="text-[9px] uppercase font-bold tracking-wider text-muted-foreground/60">
-                  Canal: {contact.channel ?? "whatsapp"}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[9px] uppercase font-bold tracking-wider text-muted-foreground/60">
+                    Canal: {contact.channel ?? "whatsapp"}
+                  </p>
+                  {contact.customer_tier && (
+                    <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded-full font-bold ${
+                      contact.customer_tier === 'vip' ? 'bg-purple-100 text-purple-800' :
+                      contact.customer_tier === 'regular' ? 'bg-blue-100 text-blue-800' :
+                      contact.customer_tier === 'new' ? 'bg-green-100 text-green-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {contact.customer_tier}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

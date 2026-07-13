@@ -15,10 +15,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ModelPicker } from "@/features/agents/components/model-picker";
 import { MetaSection } from "./meta-section";
+import { MercadoPagoSection } from "./mercadopago-section";
+import { AfipSection } from "./afip-section";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Provider = "ycloud" | "openrouter" | "highlevel" | "meta";
+type Provider = "ycloud" | "openrouter" | "highlevel" | "meta" | "mercadopago" | "afip";
 
 type IntegrationData = {
   provider: Provider;
@@ -805,6 +807,8 @@ export function IntegrationsTab({ workspaceId, initialIntegrations }: Props) {
   const meta = findIntegration(integrations, "meta");
   const openrouter = findIntegration(integrations, "openrouter");
   const highlevel = findIntegration(integrations, "highlevel");
+  const mercadopago = findIntegration(integrations, "mercadopago");
+  const afip = findIntegration(integrations, "afip");
 
   return (
     <div className="space-y-6">
@@ -830,6 +834,18 @@ export function IntegrationsTab({ workspaceId, initialIntegrations }: Props) {
       <HighLevelSection
         workspaceId={workspaceId}
         initial={highlevel}
+        onSaved={refresh}
+      />
+      <Separator />
+      <MercadoPagoSection
+        workspaceId={workspaceId}
+        initial={mercadopago}
+        onSaved={refresh}
+      />
+      <Separator />
+      <AfipSection
+        workspaceId={workspaceId}
+        initial={afip}
         onSaved={refresh}
       />
     </div>

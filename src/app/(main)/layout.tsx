@@ -15,6 +15,7 @@ import {
   LogOut,
   MessageCircle,
   Settings,
+  ShoppingBag,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -117,6 +118,17 @@ export default async function MainLayout({
             </Button>
           </Link>
 
+          <Link href="/ventas">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only sm:ml-2">Ventas</span>
+            </Button>
+          </Link>
+
           <Link href="/dashboard">
             <Button
               variant="ghost"
@@ -170,6 +182,14 @@ export default async function MainLayout({
         >
           <MessageCircle className="h-5 w-5" aria-hidden="true" />
           <span>Inbox</span>
+        </Link>
+
+        <Link
+          href="/ventas"
+          className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+        >
+          <ShoppingBag className="h-5 w-5" aria-hidden="true" />
+          <span>Ventas</span>
         </Link>
 
         <Link

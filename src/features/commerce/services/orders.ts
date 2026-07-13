@@ -93,16 +93,34 @@ export async function applyOrderPayment(
   });
 
   if (error) throw error;
-  
+
   // Recompute tier for this contact
   const { data: order } = await supabase
     .from("orders")
-    .select("contact_id")
+    .select("contact_id, conversation_id")
     .eq("id", orderId)
     .single();
 
   if (order?.contact_id) {
     await recomputeContactTier(supabase, workspaceId, order.contact_id);
+  }
+
+  // Sales pipeline: on payment, hand the conversation to Posventa (agendamiento).
+  // No-op when the workspace pipeline is disabled or the order has no conversation.
+  if (order?.conversation_id) {
+    const { data: ws } = await supabase
+      .from("workspaces")
+      .select("sales_pipeline_enabled")
+      .eq("id", workspaceId)
+      .maybeSingle();
+
+    if (ws?.sales_pipeline_enabled) {
+      await supabase
+        .from("conversations")
+        .update({ pipeline_stage: "agendamiento" })
+        .eq("id", order.conversation_id)
+        .eq("workspace_id", workspaceId);
+    }
   }
 
   return data;

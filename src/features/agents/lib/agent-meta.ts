@@ -12,33 +12,33 @@ export interface AgentTypeMeta {
 
 export const AGENT_TYPE_META: Record<AgentType, AgentTypeMeta> = {
   setter: {
-    label: "Setter",
-    tagline: "Califica leads y agenda citas",
+    label: "Agente Calificador",
+    tagline: "Califica prospectos y detecta intención de compra",
     promptGuidance: [
-      "Define el objetivo: calificar y agendar.",
-      "Lista las preguntas clave para calificar (presupuesto, urgencia, etc.).",
-      "Indica cuándo escalar a un humano.",
+      "Define el objetivo: entender qué necesita el prospecto y calificarlo.",
+      "Lista las preguntas clave para calificar (necesidad, presupuesto, urgencia).",
+      "Cuando detectes intención de compra clara, pasá la conversación a Ventas (handoff).",
       "Tono: amable, profesional y directo. Mensajes cortos.",
     ],
   },
   soporte: {
-    label: "Soporte",
-    tagline: "Resuelve dudas con precisión",
+    label: "Agente de Ventas",
+    tagline: "Cierra la venta: arma el pedido y cobra",
     promptGuidance: [
-      "Describe los temas que el agente puede resolver.",
-      "Define qué hacer cuando no sabe la respuesta (escalar).",
-      "Aclara el tono: empático y claro.",
-      "Recuérdale usar la base de conocimiento si existe.",
+      "Antes de dar precios o disponibilidad, buscá siempre en el catálogo real.",
+      "Cuando el cliente confirme, creá el pedido y ofrecé el link de pago.",
+      "No inventes precios ni productos que no estén en el catálogo.",
+      "Tono: cercano y resolutivo. Guiá al cliente hasta el pago.",
     ],
   },
   agendamiento: {
-    label: "Agendamiento",
-    tagline: "Reserva y confirma citas",
+    label: "Agente de Posventa",
+    tagline: "Seguimiento post-compra: envío, dudas y fidelización",
     promptGuidance: [
-      "Explica cómo agenda (link o calendario directo).",
-      "Qué datos pedir antes de reservar.",
-      "Cómo confirmar y recordar la cita.",
-      "Tono: eficiente y cordial.",
+      "La compra ya se pagó: enfocate en el seguimiento y la experiencia.",
+      "Informá estado del pedido, tiempos de envío y próximos pasos.",
+      "Resolvé dudas post-venta y detectá oportunidades de recompra.",
+      "Tono: cordial y proactivo.",
     ],
   },
 };

@@ -10,7 +10,11 @@ import type { ConversationChannel } from "../types/index";
 import type { ToolContext } from "@/features/tools/core/tool";
 import { resolveSystemPrompt } from "./prompt-resolver";
 import { buildSystemPrompt } from "./prompt-builder";
-import { getActiveAgent } from "@/features/agents/services/active-agent";
+import {
+  getAgentForConversation,
+  getConversationStage,
+} from "@/features/agents/services/active-agent";
+import { STAGE_SYSTEM_NOTE } from "@/features/agents/lib/stage-notes";
 import { maybeAutoProcess } from "@/features/agents/services/auto-tagging";
 import {
   getBusinessInfo,
@@ -354,7 +358,16 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     // ── 7. Build system prompt: KB > custom prompt > business info (F7) ──────
     // The active agent (if any) selects its mode-scoped published prompt; the
     // resolver falls back to the global prompt when there is no active agent.
-    const activeAgent = await getActiveAgent(batch.workspace_id);
+    // Sales pipeline: route by the conversation's stage when enabled; otherwise
+    // this returns the workspace's single active agent (unchanged behavior).
+    const activeAgent = await getAgentForConversation(
+      batch.workspace_id,
+      batch.conversation_id,
+    );
+    const pipelineStage = await getConversationStage(
+      batch.workspace_id,
+      batch.conversation_id,
+    );
     const [resolvedPrompt, businessInfo, kbResults, kbLinks] =
       await Promise.all([
         resolveSystemPrompt(
@@ -373,9 +386,14 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       .filter(Boolean)
       .join("\n\n");
     const bizContext = buildBusinessInfoContext(businessInfo);
-    const promptBase =
+    const basePrompt =
       resolvedPrompt?.body ??
       "Eres un asistente de WhatsApp. Responde de forma concisa y útil en español.";
+    // Sales pipeline: append the stage guardrail so per-stage behavior (qualify /
+    // sell / post-sale) is reliable regardless of the user-authored prompt.
+    const promptBase = pipelineStage
+      ? `${basePrompt}\n\n${STAGE_SYSTEM_NOTE[pipelineStage]}`
+      : basePrompt;
     const structured = businessInfo?.structured as {
       timezone?: string;
       name?: string;
@@ -438,7 +456,8 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     // Resolve workspace model (falls back to env default or gpt-4o-mini).
     // costModel from SEC-06 takes priority when cost policy is degraded.
     const workspaceModel = await getWorkspaceModel(batch.workspace_id);
-    const model = costModel ?? workspaceModel;
+    // In pipeline mode the stage agent's model wins over the workspace default.
+    const model = costModel ?? activeAgent?.model ?? workspaceModel;
 
     // ── 8b. Load contact for typing indicator ─────────────────────────────────
     const { data: contactRow } = await supabase

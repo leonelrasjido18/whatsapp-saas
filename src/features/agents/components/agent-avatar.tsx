@@ -18,19 +18,19 @@ export interface AvatarPreset {
 export const AVATAR_PRESETS: AvatarPreset[] = [
   {
     key: "setter",
-    label: "Vendedor",
+    label: "Calificador",
     src: "/avatars/setter.jpg",
     fallbackGradient: "from-lime-400 to-emerald-600",
   },
   {
     key: "soporte",
-    label: "Soporte",
+    label: "Ventas",
     src: "/avatars/soporte.jpg",
     fallbackGradient: "from-sky-400 to-blue-600",
   },
   {
     key: "agendamiento",
-    label: "Agenda",
+    label: "Posventa",
     src: "/avatars/agendamiento.jpg",
     fallbackGradient: "from-violet-400 to-fuchsia-600",
   },

@@ -10,6 +10,7 @@ import {
 } from "./state-machine";
 import { checkRateLimits } from "./cost-tracker";
 import { getEnabledTools } from "@/features/tools/services/tool-configs";
+import { getConversationStage } from "@/features/agents/services/active-agent";
 import type { Tool } from "@/features/tools/core/tool";
 
 function svc() {
@@ -116,8 +117,10 @@ export async function decide(opts: {
     };
   }
 
-  // 5. All checks passed — load enabled tools and respond
-  const availableTools = await getEnabledTools(workspaceId);
+  // 5. All checks passed — load enabled tools (scoped to the pipeline stage
+  //    when the sales pipeline is on) and respond.
+  const stage = await getConversationStage(workspaceId, conversationId);
+  const availableTools = await getEnabledTools(workspaceId, stage);
   return { decision: "respond", reason: "normal", availableTools };
 }
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -38,8 +39,45 @@ export function AgentsTab({
   const [editing, setEditing] = useState<AgentDto | null>(null);
   const [pending, setPending] = useState<AgentDto | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pipelineEnabled, setPipelineEnabled] = useState(false);
+  const [pipelineBusy, setPipelineBusy] = useState(false);
 
   const currentActive = agents.find((a) => a.isActive) ?? null;
+
+  useEffect(() => {
+    fetch(`/api/workspace/${workspaceId}/pipeline`)
+      .then((r) => r.json())
+      .then((d: { enabled?: boolean }) => setPipelineEnabled(Boolean(d.enabled)))
+      .catch(() => {});
+  }, [workspaceId]);
+
+  async function togglePipeline(next: boolean) {
+    setPipelineBusy(true);
+    setPipelineEnabled(next); // optimistic
+    try {
+      const res = await fetch(`/api/workspace/${workspaceId}/pipeline`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!res.ok) {
+        setPipelineEnabled(!next); // revert
+        const j = (await res.json()) as { error?: string };
+        toast.error(j.error ?? "No se pudo cambiar el pipeline");
+        return;
+      }
+      toast.success(
+        next
+          ? "Pipeline de ventas activado: Calificador → Ventas → Posventa"
+          : "Pipeline desactivado: vuelve a un único agente activo",
+      );
+    } catch {
+      setPipelineEnabled(!next);
+      toast.error("Error de conexión");
+    } finally {
+      setPipelineBusy(false);
+    }
+  }
 
   function requestActivate(agentId: string) {
     const target = agents.find((a) => a.id === agentId);
@@ -84,8 +122,31 @@ export function AgentsTab({
 
   return (
     <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+        <div className="space-y-0.5">
+          <h3 className="font-display text-sm font-medium text-foreground">
+            Pipeline de ventas
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Activá el flujo de 3 etapas por conversación: el{" "}
+            <strong>Calificador</strong> atiende, y cuando detecta intención de
+            compra pasa a <strong>Ventas</strong>; al pagarse el pedido pasa solo
+            a <strong>Posventa</strong>. Con esto apagado, responde un único
+            agente activo.
+          </p>
+        </div>
+        <Switch
+          checked={pipelineEnabled}
+          onCheckedChange={togglePipeline}
+          disabled={pipelineBusy}
+          aria-label="Activar pipeline de ventas"
+        />
+      </div>
+
       <p className="text-sm text-muted-foreground">
-        Configura tus 3 agentes. Solo uno puede estar activo a la vez.
+        {pipelineEnabled
+          ? "Con el pipeline activo, cada agente atiende su etapa. Configurá los 3."
+          : "Configura tus 3 agentes. Solo uno puede estar activo a la vez."}
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

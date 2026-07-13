@@ -52,7 +52,10 @@ export async function middleware(request: NextRequest) {
     "/terms",
     "/data-deletion",
   ];
-  const isPublicRoute = publicRoutes.includes(pathname);
+  // /pago/* is public too: the customer returning from a MercadoPago checkout
+  // is an anonymous WhatsApp user with no session (prefix match — has subpaths).
+  const isPublicRoute =
+    publicRoutes.includes(pathname) || pathname.startsWith("/pago/");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

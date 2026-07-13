@@ -24,9 +24,9 @@ export async function createCheckoutPreference(
         currency_id: "ARS"
       })) || [],
       back_urls: {
-        success: `${baseUrl}/inbox`,
-        pending: `${baseUrl}/inbox`,
-        failure: `${baseUrl}/inbox`
+        success: `${baseUrl}/pago/gracias?status=success`,
+        pending: `${baseUrl}/pago/gracias?status=pending`,
+        failure: `${baseUrl}/pago/gracias?status=failure`
       },
       auto_return: "approved",
       external_reference: order.id,
@@ -48,4 +48,22 @@ export async function getPayment(accessToken: string, paymentId: string | number
   const client = new MercadoPagoConfig({ accessToken });
   const payment = new Payment(client);
   return payment.get({ id: paymentId });
+}
+
+/**
+ * Busca un pago APROBADO para una orden por su external_reference.
+ * Usado por el cron de reconciliación cuando el webhook no llegó.
+ */
+export async function findApprovedPayment(
+  accessToken: string,
+  orderId: string
+): Promise<{ id: string } | null> {
+  const client = new MercadoPagoConfig({ accessToken });
+  const payment = new Payment(client);
+  const res: any = await payment.search({
+    options: { external_reference: orderId },
+  });
+  const results: any[] = res?.results ?? [];
+  const approved = results.find((p) => p?.status === "approved");
+  return approved ? { id: String(approved.id) } : null;
 }

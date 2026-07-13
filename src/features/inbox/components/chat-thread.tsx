@@ -321,7 +321,7 @@ export function ChatThread({
         />
 
         {/* Message list */}
-        <ScrollArea className="flex-1 px-4">
+        <ScrollArea className="flex-1 px-4 bg-neutral-50 dark:bg-transparent">
           <div className="py-4 space-y-2">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">

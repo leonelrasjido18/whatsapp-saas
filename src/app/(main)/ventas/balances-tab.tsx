@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatArs } from "@/features/commerce/lib/money";
-import { AlertTriangle, TrendingUp, Package } from "lucide-react";
+import { AlertTriangle, TrendingUp, Package, Filter } from "lucide-react";
 
 interface ProductMetric {
   name: string;
@@ -21,6 +21,8 @@ interface Balances {
   by_channel: Record<string, number>;
   top_products: ProductMetric[];
   low_stock_count: number;
+  pipeline?: { prospects: number; to_ventas: number; to_posventa: number };
+  low_stock_products?: { name: string; stock: number | null }[];
 }
 
 export default function BalancesTab({ workspaceId }: { workspaceId: string }) {
@@ -64,6 +66,42 @@ export default function BalancesTab({ workspaceId }: { workspaceId: string }) {
         <BalanceCard title="Total Histórico" amount={balances.total} />
       </div>
 
+      {balances.pipeline && (
+        <div className="border rounded-xl p-6 bg-card space-y-4 shadow-sm">
+          <div className="flex items-center gap-2 border-b pb-2">
+            <Filter className="h-5 w-5 text-primary" />
+            <h3 className="font-semibold">Embudo de Ventas (Pipeline)</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <FunnelStep
+              label="Prospectos"
+              value={balances.pipeline.prospects}
+              color="text-emerald-600 dark:text-emerald-400"
+            />
+            <FunnelStep
+              label="Pasaron a Ventas"
+              value={balances.pipeline.to_ventas}
+              color="text-sky-600 dark:text-sky-400"
+              rate={
+                balances.pipeline.prospects > 0
+                  ? balances.pipeline.to_ventas / balances.pipeline.prospects
+                  : null
+              }
+            />
+            <FunnelStep
+              label="Cerraron (Posventa)"
+              value={balances.pipeline.to_posventa}
+              color="text-violet-600 dark:text-violet-400"
+              rate={
+                balances.pipeline.to_ventas > 0
+                  ? balances.pipeline.to_posventa / balances.pipeline.to_ventas
+                  : null
+              }
+            />
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="border rounded-xl p-6 bg-card space-y-4 shadow-sm">
           <div className="flex items-center gap-2 text-primary">
@@ -73,17 +111,31 @@ export default function BalancesTab({ workspaceId }: { workspaceId: string }) {
           <div className="text-3xl font-bold">{formatArs(balances.avg_ticket)}</div>
         </div>
         
-        <div className="border rounded-xl p-6 bg-card space-y-4 shadow-sm md:col-span-2 flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-orange-500">
-              <AlertTriangle className="h-5 w-5" />
-              <h3 className="font-semibold">Alerta de Stock</h3>
+        <div className="border rounded-xl p-6 bg-card space-y-3 shadow-sm md:col-span-2">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-orange-500">
+                <AlertTriangle className="h-5 w-5" />
+                <h3 className="font-semibold">Alerta de Stock</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">Productos en o por debajo de su umbral mínimo</p>
             </div>
-            <p className="text-sm text-muted-foreground">Productos con 5 unidades o menos</p>
+            <div className="text-4xl font-black text-orange-500">
+              {balances.low_stock_count}
+            </div>
           </div>
-          <div className="text-4xl font-black text-orange-500">
-            {balances.low_stock_count}
-          </div>
+          {balances.low_stock_products && balances.low_stock_products.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {balances.low_stock_products.map((p, i) => (
+                <span
+                  key={i}
+                  className="text-xs rounded-full border border-orange-300 bg-orange-100 px-2 py-0.5 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30"
+                >
+                  {p.name}: {p.stock}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -165,6 +217,30 @@ function BalanceCard({ title, amount }: { title: string, amount: number }) {
     <div className="border rounded-xl p-6 bg-card flex flex-col gap-2 shadow-sm transition-all hover:shadow-md">
       <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
       <div className="text-3xl font-bold">{formatArs(amount)}</div>
+    </div>
+  );
+}
+
+function FunnelStep({
+  label,
+  value,
+  color,
+  rate,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  rate?: number | null;
+}) {
+  return (
+    <div className="text-center space-y-1">
+      <div className={`text-3xl font-black ${color}`}>{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      {rate != null && (
+        <div className="text-[11px] font-medium text-muted-foreground/80">
+          {Math.round(rate * 100)}% conversión
+        </div>
+      )}
     </div>
   );
 }

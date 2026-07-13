@@ -9,6 +9,7 @@ import { createOrderTool } from "./tools/create_order";
 import { getOrderStatusTool } from "./tools/get_order_status";
 import { generatePaymentLinkTool } from "./tools/generate_payment_link";
 import { handoffAVentasTool } from "./tools/handoff_a_ventas";
+import { sendProductImageTool } from "./tools/send_product_image";
 
 registry.register(echoTool);
 registry.register(scheduleLinkTool);
@@ -20,6 +21,7 @@ registry.register(createOrderTool);
 registry.register(getOrderStatusTool);
 registry.register(generatePaymentLinkTool);
 registry.register(handoffAVentasTool);
+registry.register(sendProductImageTool);
 
 export { registry };
 export type {

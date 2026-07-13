@@ -8,7 +8,7 @@
  */
 
 import { createClient as createSbClient } from "@supabase/supabase-js";
-import { sendText, sendTemplate } from "./ycloud-client";
+import { sendText, sendTemplate, sendImage } from "./ycloud-client";
 import type { TemplateParams } from "./ycloud-client";
 import { sendMetaText, isAuthError } from "./meta-client";
 import { getMetaIntegration, flagMetaReconnectRequired } from "./meta-integration";
@@ -332,6 +332,88 @@ export async function dispatchText(
   }
 
   // 6. Refresh conversation last_message_at
+  await supabase
+    .from("conversations")
+    .update({ last_message_at: new Date().toISOString() })
+    .eq("id", conversationId);
+
+  return { ok: true, wamid };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// dispatchImage — sends an image message (WhatsApp/YCloud only)
+// ──────────────────────────────────────────────────────────────────────────────
+export interface DispatchImageParams {
+  workspaceId: string;
+  conversationId: string;
+  imageUrl: string;
+  caption?: string;
+  senderUserId?: string;
+}
+
+export async function dispatchImage(
+  params: DispatchImageParams,
+): Promise<DispatchResult> {
+  const { workspaceId, conversationId, imageUrl, caption, senderUserId } = params;
+  const supabase = svc();
+
+  const ctx = await loadSendContext(conversationId, supabase);
+
+  // Images are only supported on WhatsApp here; Meta channels fall back to text elsewhere.
+  if (ctx.channel !== "whatsapp") {
+    return { ok: false, error: "IMAGE_UNSUPPORTED_CHANNEL" };
+  }
+  if (!ctx.optIn) {
+    return { ok: false, error: "OPT_OUT: contact has opted out of messages" };
+  }
+  if (
+    ctx.windowExpiresAt !== null &&
+    new Date() > new Date(ctx.windowExpiresAt)
+  ) {
+    return { ok: false, error: "WINDOW_EXPIRED" };
+  }
+  if (!ctx.phone) {
+    return { ok: false, error: "WHATSAPP_NO_PHONE" };
+  }
+
+  const { apiKey, fromPhone } = await loadYCloudIntegration(workspaceId, supabase);
+  const realSend = Boolean(apiKey && apiKey !== "placeholder");
+
+  let wamid: string | undefined;
+  if (realSend) {
+    try {
+      const sent = await sendImage({
+        apiKey,
+        from: fromPhone,
+        to: ctx.phone,
+        link: imageUrl,
+        caption,
+      });
+      wamid = sent.wamid || undefined;
+    } catch (sendErr) {
+      const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+      console.error("[dispatch] YCloud sendImage error:", errMsg);
+      return { ok: false, error: errMsg };
+    }
+  }
+
+  const { error: insertError } = await supabase.from("messages").insert({
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    direction: "out",
+    type: "image",
+    body: caption ?? null,
+    wamid: wamid ?? null,
+    status: realSend ? "sent" : "queued",
+    sender_user_id: senderUserId ?? null,
+    meta: { media_url: imageUrl, dev_mode: realSend ? undefined : true },
+  });
+
+  if (insertError) {
+    console.error("[dispatch] image insert error:", insertError.message);
+    return { ok: false, error: insertError.message };
+  }
+
   await supabase
     .from("conversations")
     .update({ last_message_at: new Date().toISOString() })

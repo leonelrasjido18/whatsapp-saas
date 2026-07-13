@@ -25,6 +25,7 @@ interface ToolConfigRow {
 const STAGE_TOOL_POLICY: Record<AgentType, Set<string>> = {
   setter: new Set([
     "catalog_search",
+    "send_product_image",
     "get_order_status",
     "check_availability",
     "schedule_link",
@@ -34,6 +35,7 @@ const STAGE_TOOL_POLICY: Record<AgentType, Set<string>> = {
   ]),
   soporte: new Set([
     "catalog_search",
+    "send_product_image",
     "create_order",
     "generate_payment_link",
     "get_order_status",
@@ -55,7 +57,8 @@ const STAGE_TOOL_POLICY: Record<AgentType, Set<string>> = {
 // The handoff tool is a system tool: always available in the Calificador stage,
 // even without an explicit tool_configs row.
 const ALWAYS_ON_BY_STAGE: Partial<Record<AgentType, string[]>> = {
-  setter: ["handoff_a_ventas"],
+  setter: ["handoff_a_ventas", "send_product_image"],
+  soporte: ["send_product_image"],
 };
 
 /**
@@ -84,17 +87,24 @@ export async function getEnabledTools(
       .filter((k): k is string => typeof k === "string"),
   );
 
-  // No pipeline stage → legacy behavior: every enabled tool.
+  let candidates: Tool[];
   if (!stage) {
-    return registry.list().filter((t) => enabledKeys.has(t.name));
+    // No pipeline stage → every toggled-on tool.
+    candidates = registry.list().filter((t) => enabledKeys.has(t.name));
+  } else {
+    const policy = STAGE_TOOL_POLICY[stage];
+    for (const key of ALWAYS_ON_BY_STAGE[stage] ?? []) {
+      enabledKeys.add(key);
+    }
+    candidates = registry
+      .list()
+      .filter((t) => enabledKeys.has(t.name) && policy.has(t.name));
   }
 
-  const policy = STAGE_TOOL_POLICY[stage];
-  for (const key of ALWAYS_ON_BY_STAGE[stage] ?? []) {
-    enabledKeys.add(key);
-  }
-
-  return registry
-    .list()
-    .filter((t) => enabledKeys.has(t.name) && policy.has(t.name));
+  // Enforce each tool's own gate (plan feature / configured credentials).
+  // This is the single place plan-gating is applied to the agent runtime.
+  const allowed = await Promise.all(
+    candidates.map((t) => Promise.resolve(t.enabledFor(workspaceId))),
+  );
+  return candidates.filter((_, i) => allowed[i]);
 }

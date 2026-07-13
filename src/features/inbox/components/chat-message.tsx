@@ -85,10 +85,10 @@ export function ChatMessage({ message }: ChatMessageProps) {
     <div className={cn("flex", isOutbound ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[75%] rounded-lg px-3 py-2 space-y-1 border",
+          "max-w-[75%] rounded-lg px-3 py-2 space-y-1 border shadow-sm",
           isOutbound
-            ? "bg-primary/20 border-primary/40 dark:bg-primary/10 dark:border-primary/30 rounded-tr-sm"
-            : "bg-card border-border dark:bg-muted/50 dark:border-transparent rounded-tl-sm",
+            ? "bg-lime-100 border-lime-300 text-lime-950 dark:bg-primary/10 dark:border-primary/30 dark:text-foreground rounded-tr-sm"
+            : "bg-neutral-100 border-neutral-200 text-neutral-900 dark:bg-muted/50 dark:border-transparent dark:text-foreground rounded-tl-sm",
         )}
       >
         {message.type !== "text" && message.type !== "system" ? (

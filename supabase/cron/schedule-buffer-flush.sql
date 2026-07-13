@@ -49,9 +49,46 @@ select cron.schedule(
   $job$
 );
 
--- Verify they registered (expect three active rows):
+-- Commerce: recordatorio de carritos abandonados (cada hora a los :30).
+select cron.schedule(
+  'cart-abandonment',
+  '30 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/cart-abandonment',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Commerce: reconciliación de pagos MercadoPago (cada 30 min).
+select cron.schedule(
+  'payment-reconciliation',
+  '*/30 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/payment-reconciliation',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Commerce: re-enganche de clientes inactivos (diario 14:00 UTC / 11:00 ART).
+select cron.schedule(
+  'reengagement',
+  '0 14 * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/reengagement',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Verify they registered:
 --   select jobname, schedule, active from cron.job
---   where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay');
+--   where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay',
+--     'cart-abandonment', 'payment-reconciliation', 'reengagement');
 --
 -- Inspect recent runs / failures:
 --   select status, return_message, start_time

@@ -96,7 +96,8 @@ export function ConversationItem({
         <div
           className={cn(
             "h-10 w-10 shrink-0 rounded-full flex items-center justify-center",
-            "bg-primary/10 text-primary font-mono text-xs font-semibold select-none",
+            "bg-neutral-200 text-neutral-700 dark:bg-primary/10 dark:text-primary",
+            "font-mono text-xs font-semibold select-none",
           )}
           aria-hidden="true"
         >

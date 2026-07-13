@@ -58,8 +58,8 @@ function Initials({ name }: { name: string | null }) {
     : "?";
 
   return (
-    <div className="h-10 w-10 rounded-full bg-[hsl(var(--electric-lime)/0.15)] border border-[hsl(var(--electric-lime)/0.3)] flex items-center justify-center shrink-0">
-      <span className="text-xs font-semibold text-[hsl(var(--electric-lime))] font-mono">
+    <div className="h-10 w-10 rounded-full bg-neutral-200 border border-neutral-300 dark:bg-[hsl(var(--electric-lime)/0.15)] dark:border-[hsl(var(--electric-lime)/0.3)] flex items-center justify-center shrink-0">
+      <span className="text-xs font-semibold text-neutral-700 dark:text-[hsl(var(--electric-lime))] font-mono">
         {letters}
       </span>
     </div>

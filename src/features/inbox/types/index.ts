@@ -8,6 +8,9 @@ export type ConversationState =
   | "paused"
   | "closed";
 
+/** Sales-pipeline stage of a conversation (reuses the agent_type enum). */
+export type PipelineStage = "setter" | "soporte" | "agendamiento";
+
 export type MessageDirection = "in" | "out";
 
 export type MessageStatus = "queued" | "sent" | "delivered" | "read" | "failed";
@@ -57,6 +60,8 @@ export interface ConversationRow {
   last_message_at: string | null;
   window_expires_at: string | null;
   unread_count: number;
+  /** Sales-pipeline stage; null until the pipeline handles the conversation. */
+  pipeline_stage?: PipelineStage | null;
   created_at: string;
   updated_at: string;
 }

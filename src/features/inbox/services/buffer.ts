@@ -12,7 +12,7 @@ import { resolveSystemPrompt } from "./prompt-resolver";
 import { buildSystemPrompt } from "./prompt-builder";
 import {
   getAgentForConversation,
-  getConversationStage,
+  ensureConversationStage,
 } from "@/features/agents/services/active-agent";
 import { STAGE_SYSTEM_NOTE } from "@/features/agents/lib/stage-notes";
 import { maybeAutoProcess } from "@/features/agents/services/auto-tagging";
@@ -364,7 +364,7 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       batch.workspace_id,
       batch.conversation_id,
     );
-    const pipelineStage = await getConversationStage(
+    const pipelineStage = await ensureConversationStage(
       batch.workspace_id,
       batch.conversation_id,
     );

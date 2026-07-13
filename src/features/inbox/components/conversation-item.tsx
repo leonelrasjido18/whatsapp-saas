@@ -5,6 +5,10 @@ import type {
 } from "@/features/inbox/types";
 import { StateBadge } from "./state-badge";
 import { ChannelBadge } from "./channel-badge";
+import {
+  PIPELINE_STAGE_LABEL,
+  PIPELINE_STAGE_BADGE_CLASS,
+} from "@/features/agents/lib/pipeline-stage-ui";
 
 interface ConversationItemProps {
   conversation: ConversationWithContact;
@@ -117,6 +121,19 @@ export function ConversationItem({
             </span>
           </div>
         </div>
+
+        {conversation.pipeline_stage && (
+          <div>
+            <span
+              className={cn(
+                "inline-block rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                PIPELINE_STAGE_BADGE_CLASS[conversation.pipeline_stage],
+              )}
+            >
+              {PIPELINE_STAGE_LABEL[conversation.pipeline_stage]}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground truncate">{preview}</p>

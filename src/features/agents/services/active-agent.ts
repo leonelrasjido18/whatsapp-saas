@@ -79,6 +79,51 @@ export async function getConversationStage(
 }
 
 /**
+ * Like getConversationStage, but PERSISTS the default 'setter' stage the first
+ * time a pipeline conversation is handled (so the inbox badge reflects it).
+ * Returns null when the pipeline is disabled.
+ */
+export async function ensureConversationStage(
+  workspaceId: string,
+  conversationId: string,
+): Promise<AgentType | null> {
+  try {
+    const db = svcClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+
+    const { data: ws } = await db
+      .from("workspaces")
+      .select("sales_pipeline_enabled")
+      .eq("id", workspaceId)
+      .maybeSingle();
+
+    if (!ws?.sales_pipeline_enabled) return null;
+
+    const { data: conv } = await db
+      .from("conversations")
+      .select("pipeline_stage")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    const existing = (conv?.pipeline_stage as AgentType | null) ?? null;
+    if (existing) return existing;
+
+    // Persist the entry stage exactly once (only when still null).
+    await db
+      .from("conversations")
+      .update({ pipeline_stage: "setter" })
+      .eq("id", conversationId)
+      .is("pipeline_stage", null);
+
+    return "setter";
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Returns the agent that should handle THIS conversation. When the sales
  * pipeline is enabled, routes by the conversation's stage; otherwise falls
  * back to the workspace's single active agent (unchanged behavior).

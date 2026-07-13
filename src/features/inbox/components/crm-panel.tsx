@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateContact, syncContactHL } from "../services/contact-actions";
+import { PipelineStageSelect } from "./pipeline-stage-select";
 import type { ContactRow } from "@/features/inbox/types";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -69,10 +70,7 @@ function Initials({ name }: { name: string | null }) {
 // CrmPanel
 // ──────────────────────────────────────────────────────────────────────────────
 
-export function CrmPanel({
-  contact,
-  conversationId: _conversationId,
-}: CrmPanelProps) {
+export function CrmPanel({ contact, conversationId }: CrmPanelProps) {
   const [isPending, startTransition] = useTransition();
 
   // Local editable state
@@ -253,6 +251,9 @@ export function CrmPanel({
 
         {crmOpen && (
           <div className="px-4 py-3 space-y-3">
+            {/* Sales pipeline stage (manual override) — hidden when off */}
+            <PipelineStageSelect conversationId={conversationId} />
+
             {/* Stage */}
             <div className="space-y-1">
               <Label className="text-[10px] text-[hsl(var(--electric-lime))] uppercase tracking-wider">

@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as svcClient } from "@supabase/supabase-js";
 import { InboxLayout } from "@/features/inbox/components/inbox-layout";
 import { ChatThread } from "@/features/inbox/components/chat-thread";
 import type {
@@ -46,6 +47,21 @@ export default async function InboxDetailPage({ params }: PageProps) {
   if (!convData) notFound();
 
   const convWithContact = convData as ConversationRow & { contact: ContactRow };
+
+  // Mark as read: opening the conversation clears its unread badge. Uses the
+  // service role (members can't UPDATE conversations under RLS) and runs before
+  // the sidebar query below so the current chat shows 0 immediately. Realtime
+  // propagates the change to the /inbox list.
+  if ((convWithContact.unread_count ?? 0) > 0) {
+    await svcClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    )
+      .from("conversations")
+      .update({ unread_count: 0 })
+      .eq("id", id);
+    convWithContact.unread_count = 0;
+  }
 
   // 4. Fetch messages (ASC, limit 100)
   const { data: messagesData } = await supabase

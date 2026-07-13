@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,20 @@ export function InboxLayout({
   // Live-update the list when chats arrive/change (new conversation, new
   // message, state/handoff change) — re-runs the server component.
   useRealtimeConversations(workspaceId);
+
+  // Press Escape to leave the open conversation and return to the list.
+  useEffect(() => {
+    const inChat = /^\/inbox\/.+/.test(pathname);
+    if (!inChat) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        router.push("/inbox");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pathname, router]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

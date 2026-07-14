@@ -16,7 +16,16 @@
       "Bash(git check-ignore *)",
       "Bash(echo \"exit: $?\")",
       "Bash(git add *)",
-      "Bash(git commit --amend -q -m ' *)"
+      "Bash(git commit --amend -q -m ' *)",
+      "Bash(git push *)",
+      "Bash(ssh -o ConnectTimeout=10 root@srv1467601.hstgr.cloud \"cd /var/www/whatsapp-saas && git pull origin main 2>&1 && npm run build 2>&1 | tail -8\")",
+      "Bash(ssh -o ConnectTimeout=10 root@srv1467601.hstgr.cloud \"pm2 restart whatsapp-saas --update-env 2>&1 && sleep 3 && pm2 list | grep whatsapp-saas\")",
+      "Bash(curl -sS -o /dev/null -w \"login: %{http_code}\\\\n\" https://whatsapp.synory.dev/login)",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:\\\\Users\\\\leone\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Agente-whatsapp-codigo-whatsapp-saas\\\\360086fc-09e2-49b1-95d8-9759677b9bf2\\\\scratchpad\\\\gen-link.mjs\")",
+      "Bash(node \"C:\\\\Users\\\\leone\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Agente-whatsapp-codigo-whatsapp-saas\\\\360086fc-09e2-49b1-95d8-9759677b9bf2\\\\scratchpad\\\\gen-link2.mjs\")",
+      "Bash(node \"C:\\\\Users\\\\leone\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Agente-whatsapp-codigo-whatsapp-saas\\\\360086fc-09e2-49b1-95d8-9759677b9bf2\\\\scratchpad\\\\real-recover.mjs\")",
+      "Bash(git commit -q -m ' *)"
     ]
   }
 }

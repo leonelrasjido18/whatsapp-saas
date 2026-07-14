@@ -40,6 +40,22 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+
+  // Supabase Auth email links (recovery, etc.) should redirect to
+  // /auth/confirm?code=...&next=..., but in this project Supabase has been
+  // observed to collapse any custom redirect_to down to the bare Site URL
+  // regardless of the redirect allow-list — landing the visitor on "/" (or
+  // whatever path) with just "?code=...". Catch that here, BEFORE the
+  // no-session redirect below would otherwise strip the code, and forward it
+  // to /auth/confirm so the PKCE code still gets exchanged for a session.
+  const authCode = request.nextUrl.searchParams.get("code");
+  if (authCode && !pathname.startsWith("/auth/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/confirm";
+    url.search = `?code=${encodeURIComponent(authCode)}&next=/reset-password`;
+    return NextResponse.redirect(url);
+  }
+
   // Routes reachable without a session.
   const publicRoutes = [
     "/login",

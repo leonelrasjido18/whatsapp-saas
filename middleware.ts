@@ -75,6 +75,9 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     publicRoutes.includes(pathname) ||
     pathname.startsWith("/pago/") ||
+    // /r/* is the tracked Google-review redirect the customer opens from
+    // WhatsApp — an anonymous visitor with no session.
+    pathname.startsWith("/r/") ||
     pathname.startsWith("/auth/");
 
   if (!user && !isPublicRoute) {

@@ -1,4 +1,8 @@
-export type ConversationChannel = "whatsapp" | "facebook" | "instagram";
+export type ConversationChannel =
+  | "whatsapp"
+  | "facebook"
+  | "instagram"
+  | "webchat";
 
 export type ConversationState =
   | "ai_active"

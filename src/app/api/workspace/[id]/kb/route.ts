@@ -148,6 +148,12 @@ export async function POST(
       meta,
     });
 
+    // Best-effort: surface chunk count in the doc list without a second round trip.
+    await svc()
+      .from("kb_documents")
+      .update({ meta: { ...(meta ?? {}), chunk_count: result.chunksCreated } })
+      .eq("id", result.documentId);
+
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (err) {
     console.error("[POST /api/workspace/[id]/kb]:", err);
@@ -224,11 +230,21 @@ export async function DELETE(
     );
   }
 
-  // Delete from Storage if media_url exists in meta
+  // Delete the underlying file from Storage, if any (uploaded PDF/Word/Excel docs).
   const meta = existing.meta as Record<string, unknown> | null;
-  if (meta?.media_url && typeof meta.media_url === "string") {
+  if (
+    typeof meta?.storage_bucket === "string" &&
+    typeof meta?.storage_path === "string"
+  ) {
     try {
-      // Extract path from storage URL: .../storage/v1/object/public/[bucket]/[path]
+      await db.storage.from(meta.storage_bucket).remove([meta.storage_path]);
+    } catch {
+      // Non-fatal — proceed with DB deletion
+      console.warn("[DELETE /api/workspace/[id]/kb] Storage removal failed");
+    }
+  } else if (meta?.media_url && typeof meta.media_url === "string") {
+    // Legacy shape: full public-bucket-style URL instead of a bucket+path pair.
+    try {
       const url = new URL(meta.media_url);
       const segments = url.pathname.split("/object/public/");
       if (segments.length === 2) {

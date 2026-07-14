@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import {
   Plus,
@@ -10,6 +10,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  UploadCloud,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +23,8 @@ import { Separator } from "@/components/ui/separator";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SourceType = "doc" | "faq" | "url" | "snippet";
+type SourceType = "doc" | "faq" | "url" | "snippet" | "pdf" | "docx" | "xlsx";
+type UploadableType = "pdf" | "docx" | "xlsx";
 
 interface KbDocument {
   id: string;
@@ -43,6 +46,9 @@ const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
   faq: "FAQ",
   url: "URL",
   snippet: "Snippet",
+  pdf: "PDF",
+  docx: "Word",
+  xlsx: "Excel",
 };
 
 const SOURCE_TYPE_COLORS: Record<SourceType, string> = {
@@ -50,7 +56,30 @@ const SOURCE_TYPE_COLORS: Record<SourceType, string> = {
   faq: "text-amber-400 border-amber-400/30",
   url: "text-purple-400 border-purple-400/30",
   snippet: "text-green-400 border-green-400/30",
+  pdf: "text-red-400 border-red-400/30",
+  docx: "text-sky-400 border-sky-400/30",
+  xlsx: "text-emerald-400 border-emerald-400/30",
 };
+
+const ACCEPTED_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv"];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// The text/URL form only makes sense for these — pdf/docx/xlsx are set
+// automatically by the file upload flow below, not picked by the user.
+const TEXT_SOURCE_TYPES: SourceType[] = ["doc", "faq", "url", "snippet"];
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function kindFromFilename(filename: string): UploadableType | null {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (ext === "doc" || ext === "docx") return "docx";
+  if (ext === "xls" || ext === "xlsx" || ext === "csv") return "xlsx";
+  return null;
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("es-MX", {
@@ -64,19 +93,44 @@ function formatDate(iso: string): string {
 
 function DocumentRow({
   doc,
+  workspaceId,
   onDelete,
 }: {
   doc: KbDocument;
+  workspaceId: string;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [chunks, setChunks] = useState<KbChunk[] | null>(null);
   const [loadingChunks, setLoadingChunks] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const sourceType = (doc.source_type as SourceType) ?? "doc";
   const colorClass = SOURCE_TYPE_COLORS[sourceType] ?? SOURCE_TYPE_COLORS.doc;
   const label = SOURCE_TYPE_LABELS[sourceType] ?? doc.source_type;
+  const hasFile =
+    typeof doc.meta?.storage_path === "string" &&
+    typeof doc.meta?.storage_bucket === "string";
+
+  async function handleDownload(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDownloading(true);
+    try {
+      const res = await fetch(
+        `/api/workspace/${workspaceId}/kb/${doc.id}/download`,
+      );
+      const json = (await res.json()) as { data?: { url: string }; error?: string };
+      if (!res.ok || !json.data) {
+        throw new Error(json.error ?? "No se pudo descargar el archivo");
+      }
+      window.open(json.data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al descargar");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function handleExpand() {
     const next = !expanded;
@@ -146,6 +200,23 @@ function DocumentRow({
           </Badge>
         </button>
 
+        {hasFile && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading}
+            aria-label={`Descargar archivo de ${doc.title}`}
+            aria-busy={downloading}
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+          >
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden />
+            )}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={handleDelete}
@@ -208,12 +279,18 @@ export function KbTab({ workspaceId }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Upload form
+  // Upload form (text/URL)
   const [title, setTitle] = useState("");
   const [sourceType, setSourceType] = useState<SourceType>("doc");
   const [content, setContent] = useState("");
   const [urlInput, setUrlInput] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+
+  // File upload (PDF/Word/Excel)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -286,6 +363,56 @@ export function KbTab({ workspaceId }: Props) {
       toast.error(err instanceof Error ? err.message : "Error al agregar");
     } finally {
       setIsAdding(false);
+    }
+  }
+
+  function pickFile(file: File | null) {
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+    if (!kindFromFilename(file.name)) {
+      toast.error("Formato no soportado. Usa PDF, Word o Excel.");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error("El archivo supera el máximo de 10 MB");
+      return;
+    }
+    setSelectedFile(file);
+  }
+
+  async function handleUpload() {
+    if (!selectedFile) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("title", selectedFile.name);
+
+      const res = await fetch(`/api/workspace/${workspaceId}/kb/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = (await res.json()) as {
+        data?: { documentId: string; chunksCreated: number; truncated?: boolean };
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error ?? "Error al subir el archivo");
+
+      toast.success(
+        `${selectedFile.name} indexado — ${json.data?.chunksCreated ?? 0} chunks generados` +
+          (json.data?.truncated ? " (contenido muy largo, se truncó)" : ""),
+      );
+
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir el archivo");
+    } finally {
+      setIsUploading(false);
     }
   }
 
@@ -379,7 +506,7 @@ export function KbTab({ workspaceId }: Props) {
             onChange={(e) => setSourceType(e.target.value as SourceType)}
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            {(Object.keys(SOURCE_TYPE_LABELS) as SourceType[]).map((t) => (
+            {TEXT_SOURCE_TYPES.map((t) => (
               <option key={t} value={t}>
                 {SOURCE_TYPE_LABELS[t]}
               </option>
@@ -457,6 +584,106 @@ export function KbTab({ workspaceId }: Props) {
 
       <Separator />
 
+      {/* Section 1b — File upload (PDF/Word/Excel) */}
+      <div className="space-y-4">
+        <div>
+          <h3 className="font-display text-sm font-medium text-foreground">
+            Subir un archivo
+          </h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            PDF, Word (.doc/.docx) o Excel (.xls/.xlsx/.csv) — extraemos el
+            texto automáticamente y lo indexamos. Máx. 10 MB.
+          </p>
+        </div>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            pickFile(e.dataTransfer.files?.[0] ?? null);
+          }}
+          className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            isDragging
+              ? "border-primary bg-primary/5"
+              : "border-border/60 hover:border-border"
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_EXTENSIONS.join(",")}
+            className="hidden"
+            onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+          />
+          <UploadCloud
+            className="h-8 w-8 text-muted-foreground/60"
+            aria-hidden
+          />
+          {selectedFile ? (
+            <p className="text-sm text-foreground">
+              {selectedFile.name}{" "}
+              <span className="text-muted-foreground">
+                ({formatBytes(selectedFile.size)})
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Arrastrá un archivo acá o hacé clic para elegirlo
+            </p>
+          )}
+        </div>
+
+        {selectedFile && (
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleUpload}
+              disabled={isUploading}
+              aria-busy={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+                  Extrayendo e indexando…
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="h-4 w-4 mr-1.5" aria-hidden />
+                  Subir e indexar
+                </>
+              )}
+            </Button>
+            {!isUploading && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setSelectedFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Separator />
+
       {/* Section 2 — Document list */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -489,7 +716,12 @@ export function KbTab({ workspaceId }: Props) {
         ) : (
           <ul className="space-y-2" role="list">
             {documents.map((doc) => (
-              <DocumentRow key={doc.id} doc={doc} onDelete={handleDelete} />
+              <DocumentRow
+                key={doc.id}
+                doc={doc}
+                workspaceId={workspaceId}
+                onDelete={handleDelete}
+              />
             ))}
           </ul>
         )}

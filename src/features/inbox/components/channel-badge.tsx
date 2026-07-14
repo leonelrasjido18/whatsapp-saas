@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Globe } from "lucide-react";
 import { Facebook, Instagram } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { ConversationChannel } from "@/features/inbox/types";
@@ -27,6 +27,11 @@ const CHANNEL_CONFIG = {
     label: "Instagram",
     className: "text-[#E1306C] bg-[#E1306C]/10 border-[#E1306C]/20",
     Icon: Instagram,
+  },
+  webchat: {
+    label: "Web",
+    className: "text-[#2563eb] bg-[#2563eb]/10 border-[#2563eb]/20",
+    Icon: Globe,
   },
 };
 

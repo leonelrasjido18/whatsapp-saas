@@ -110,14 +110,14 @@ export function DashboardMetrics({
   recentConversations,
 }: DashboardMetricsProps) {
   return (
-    <div className="p-6 space-y-8 max-w-5xl mx-auto">
-      {/* Page heading */}
+    <div className="space-y-8">
+      {/* Section heading */}
       <div>
-        <h1 className="font-display text-xl font-semibold text-foreground">
-          Dashboard
-        </h1>
+        <h2 className="font-display text-base font-semibold text-foreground">
+          Actividad de hoy
+        </h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Actividad del workspace hoy
+          Operación del workspace en tiempo real
         </p>
       </div>
 

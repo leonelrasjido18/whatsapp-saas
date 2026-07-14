@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAllWorkspacesWithStats } from "@/features/agency/services/agency-actions";
 import { WorkspacesTable } from "@/features/agency/components/workspaces-table";
+import { BrandingEditor } from "@/features/agency/components/branding-editor";
 import { Building2, Users, MessageCircle, Wifi } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +100,9 @@ export default async function AgencyWorkspacesPage() {
 
       {/* Table */}
       <WorkspacesTable workspaces={workspaces} />
+
+      {/* White-label branding */}
+      <BrandingEditor />
     </div>
   );
 }

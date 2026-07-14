@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Product } from "@/features/commerce/types";
 import { formatArs } from "@/features/commerce/lib/money";
 import ProductFormSheet from "./product-form-sheet";
 import StockAdjustDialog from "./stock-adjust-dialog";
+import CatalogImportDialog from "./catalog-import-dialog";
 
 export default function CatalogTab({ workspaceId, role }: { workspaceId: string, role: string }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -16,6 +17,7 @@ export default function CatalogTab({ workspaceId, role }: { workspaceId: string,
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stockAdjustProduct, setStockAdjustProduct] = useState<Product | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const canEdit = ["admin", "manager"].includes(role);
 
@@ -54,10 +56,16 @@ export default function CatalogTab({ workspaceId, role }: { workspaceId: string,
           />
         </div>
         {canEdit && (
-          <Button onClick={() => { setSelectedProduct(null); setIsFormOpen(true); }}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Producto
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Importar Excel
+            </Button>
+            <Button onClick={() => { setSelectedProduct(null); setIsFormOpen(true); }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Producto
+            </Button>
+          </div>
         )}
       </div>
 
@@ -109,10 +117,17 @@ export default function CatalogTab({ workspaceId, role }: { workspaceId: string,
         onSuccess={loadProducts}
       />
 
-      <StockAdjustDialog 
+      <StockAdjustDialog
         product={stockAdjustProduct}
         onClose={() => setStockAdjustProduct(null)}
         workspaceId={workspaceId}
+        onSuccess={loadProducts}
+      />
+
+      <CatalogImportDialog
+        workspaceId={workspaceId}
+        open={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
         onSuccess={loadProducts}
       />
     </div>

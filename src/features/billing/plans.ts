@@ -16,6 +16,7 @@ export interface Plan {
   degrade_threshold: number; // When to switch to cheaper model (typically 80% of daily budget)
   max_agents: number; // How many agents can be active simultaneously
   max_team_members: number; // How many users can be added to workspace
+  campaign_monthly_limit: number; // Max campaign recipients per calendar month (0 = feature off)
   mercadopago_preapproval_plan_id?: string; // For recurring subscriptions (Preapproval)
   features: {
     knowledge_base: boolean;
@@ -27,6 +28,7 @@ export interface Plan {
     ai_sales_tools: boolean;
     merchant_payments: boolean;
     invoicing: boolean;
+    campaigns: boolean;
   };
 }
 
@@ -40,6 +42,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     degrade_threshold: 400_000, // Degrade at 80%
     max_agents: 1, // Only 1 agent (setter, soporte, or agendamiento — pick one)
     max_team_members: 2, // Owner + 1 teammate
+    campaign_monthly_limit: 0, // Campaigns not included in Starter
     features: {
       knowledge_base: false,
       highlevel_sync: false,
@@ -50,6 +53,7 @@ export const PLANS: Record<PlanTier, Plan> = {
       ai_sales_tools: false,
       merchant_payments: false,
       invoicing: false,
+      campaigns: false,
     },
   },
 
@@ -62,6 +66,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     degrade_threshold: 1_600_000, // Degrade at 80%
     max_agents: 3, // All 3 agents (setter + soporte + agendamiento)
     max_team_members: 5,
+    campaign_monthly_limit: 1000, // Up to 1.000 campaign recipients/month
     features: {
       knowledge_base: true, // KB search + semantic search
       highlevel_sync: true, // Sync contacts to HighLevel
@@ -72,6 +77,7 @@ export const PLANS: Record<PlanTier, Plan> = {
       ai_sales_tools: true,
       merchant_payments: true,
       invoicing: true,
+      campaigns: true,
     },
   },
 
@@ -84,6 +90,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     degrade_threshold: 4_000_000, // Degrade at 80%
     max_agents: 3, // All agents
     max_team_members: 20, // Full team
+    campaign_monthly_limit: 100_000, // Effectively unlimited campaign recipients/month
     features: {
       knowledge_base: true,
       highlevel_sync: true,
@@ -94,6 +101,7 @@ export const PLANS: Record<PlanTier, Plan> = {
       ai_sales_tools: true,
       merchant_payments: true,
       invoicing: true,
+      campaigns: true,
     },
   },
 };
@@ -145,4 +153,11 @@ export function getMaxAgents(tier: PlanTier): number {
  */
 export function getMaxTeamMembers(tier: PlanTier): number {
   return PLANS[tier].max_team_members;
+}
+
+/**
+ * Get the monthly campaign recipient limit for a plan (0 = campaigns disabled)
+ */
+export function getCampaignMonthlyLimit(tier: PlanTier): number {
+  return PLANS[tier].campaign_monthly_limit;
 }

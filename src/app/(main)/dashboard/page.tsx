@@ -5,7 +5,12 @@ import {
   getWorkspaceMetrics,
   getRecentConversations,
 } from "@/features/dashboard/services/metrics";
+import {
+  computeRoiReport,
+  lastNDaysWindows,
+} from "@/features/dashboard/services/roi-report";
 import { DashboardMetrics } from "@/features/dashboard/components/dashboard-metrics";
+import { RoiSection } from "@/features/dashboard/components/roi-section";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +35,39 @@ export default async function DashboardPage() {
     );
   }
 
-  const [metrics, recentConversations] = await Promise.all([
-    getWorkspaceMetrics(membership.workspace_id),
-    getRecentConversations(membership.workspace_id, 5),
-  ]);
+  const windows = lastNDaysWindows(7);
+
+  const [metrics, recentConversations, roiCurrent, roiPrevious] =
+    await Promise.all([
+      getWorkspaceMetrics(membership.workspace_id),
+      getRecentConversations(membership.workspace_id, 5),
+      computeRoiReport(
+        membership.workspace_id,
+        windows.current.from,
+        windows.current.to,
+      ),
+      computeRoiReport(
+        membership.workspace_id,
+        windows.previous.from,
+        windows.previous.to,
+      ),
+    ]);
 
   return (
-    <DashboardMetrics
-      metrics={metrics}
-      recentConversations={recentConversations}
-    />
+    <div className="p-6 space-y-8 max-w-5xl mx-auto">
+      <div>
+        <h1 className="font-display text-xl font-semibold text-foreground">
+          Dashboard
+        </h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Resumen de resultados y actividad del workspace
+        </p>
+      </div>
+      <RoiSection current={roiCurrent} previous={roiPrevious} />
+      <DashboardMetrics
+        metrics={metrics}
+        recentConversations={recentConversations}
+      />
+    </div>
   );
 }

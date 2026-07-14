@@ -8,6 +8,9 @@ import { TeamTab } from "./team-tab";
 import { TemplatesTab } from "./templates-tab";
 import { AutomationsTab } from "./automations-tab";
 import { KbTab } from "./kb-tab";
+import { ReviewsTab } from "./reviews-tab";
+import { WebchatTab } from "./webchat-tab";
+import { CouponsTab } from "./coupons-tab";
 import { AgentsTab } from "@/features/agents/components/agents-tab";
 import type { AgentDto } from "@/features/agents/types";
 
@@ -61,6 +64,9 @@ export function SettingsShell({
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="knowledge-base">Knowledge Base</TabsTrigger>
+            <TabsTrigger value="resenas">Reseñas</TabsTrigger>
+            <TabsTrigger value="webchat">Widget Web</TabsTrigger>
+            <TabsTrigger value="cupones">Cupones</TabsTrigger>
             <TabsTrigger value="equipo">Equipo</TabsTrigger>
             <TabsTrigger value="automatizaciones">Automatizaciones</TabsTrigger>
           </TabsList>
@@ -110,6 +116,24 @@ export function SettingsShell({
         <TabsContent value="knowledge-base">
           <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
             <KbTab workspaceId={workspaceId} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="resenas">
+          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+            <ReviewsTab workspaceId={workspaceId} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="webchat">
+          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+            <WebchatTab workspaceId={workspaceId} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="cupones">
+          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+            <CouponsTab workspaceId={workspaceId} />
           </div>
         </TabsContent>
 

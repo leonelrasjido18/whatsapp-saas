@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { Tool } from "../core/tool";
-import { createOrder } from "@/features/commerce/services/orders";
+import { createOrderWithCoupon } from "@/features/commerce/services/orders";
+import {
+  validateCoupon,
+  computeSubtotal,
+} from "@/features/commerce/services/coupons";
 import { hasFeature } from "@/features/billing/plans";
 import type { PlanTier } from "@/features/billing/plans";
 
@@ -32,6 +36,10 @@ const schema = z.object({
     .min(1)
     .describe("Lista de artículos a comprar. Solo pasar cuando el cliente CONFIRME la compra."),
   note: z.string().optional().describe("Notas del pedido (ej. 'Sin picante', 'Envío a calle X')"),
+  coupon_code: z
+    .string()
+    .optional()
+    .describe("Código de cupón de descuento si el cliente tiene uno."),
 });
 
 export const createOrderTool: Tool<z.infer<typeof schema>> = {
@@ -48,13 +56,41 @@ export const createOrderTool: Tool<z.infer<typeof schema>> = {
     try {
       const supabase = svc();
 
-      const order = await createOrder(supabase, ctx.workspaceId, null, {
+      // Resolve and validate a coupon before creating the order, so the
+      // discount is priced into the order total. Redemption happens after
+      // creation inside createOrderWithCoupon.
+      let discount = 0;
+      let couponId: string | undefined;
+      let couponError: string | undefined;
+      if (args.coupon_code) {
+        const subtotal = await computeSubtotal(
+          supabase,
+          ctx.workspaceId,
+          args.items,
+        );
+        const validation = await validateCoupon(
+          supabase,
+          ctx.workspaceId,
+          args.coupon_code,
+          subtotal,
+        );
+        if (validation.ok && validation.coupon) {
+          discount = validation.discount ?? 0;
+          couponId = validation.coupon.id;
+        } else {
+          couponError = validation.error;
+        }
+      }
+
+      const order = await createOrderWithCoupon(supabase, ctx.workspaceId, null, {
         contact_id: ctx.contactId,
         conversation_id: ctx.conversationId,
         source: "chat",
         items: args.items,
         note: args.note,
         channel: "whatsapp",
+        discount,
+        coupon_id: couponId,
       });
 
       return {
@@ -64,9 +100,12 @@ export const createOrderTool: Tool<z.infer<typeof schema>> = {
           order_number: order.order_number,
           total: order.total,
           total_formatted: `$${Number(order.total).toLocaleString("es-AR")}`,
+          discount_applied: discount,
+          coupon_error: couponError,
           status: order.status,
-          message:
-            "Orden creada. Informa al cliente el número de orden y el total. Luego ofrece forma de pago.",
+          message: couponError
+            ? `Orden creada, pero el cupón no se aplicó: ${couponError}. Informa al cliente el total y ofrece forma de pago.`
+            : "Orden creada. Informa al cliente el número de orden y el total. Luego ofrece forma de pago.",
         },
       };
     } catch (e: any) {

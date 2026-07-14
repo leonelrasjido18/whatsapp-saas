@@ -10,6 +10,28 @@ export interface CreateOrderPayload {
   note?: string;
   channel?: string;
   discount?: number;
+  /** Coupon applied to this order (already validated); redeemed after creation. */
+  coupon_id?: string;
+}
+
+/**
+ * Creates an order and, when a validated coupon is attached, redeems it
+ * atomically afterward. If redemption fails (e.g. the coupon was exhausted
+ * between validation and creation) the order still stands — the discount was
+ * already priced in, and burning nothing is the safe failure mode.
+ */
+export async function createOrderWithCoupon(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string | null,
+  payload: CreateOrderPayload,
+) {
+  const order = await createOrder(supabase, workspaceId, userId, payload);
+  if (payload.coupon_id) {
+    const { redeemCoupon } = await import("./coupons");
+    await redeemCoupon(supabase, payload.coupon_id).catch(() => false);
+  }
+  return order;
 }
 
 export async function createOrder(

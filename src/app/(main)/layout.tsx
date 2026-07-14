@@ -6,14 +6,17 @@ import {
   listMemberships,
 } from "@/features/workspace/services/active-workspace";
 import { WorkspaceSwitcher } from "@/features/workspace/components/workspace-switcher";
+import { getPlatformBranding } from "@/features/agency/services/branding";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   Building2,
+  CalendarClock,
   LayoutDashboard,
   LogOut,
   MessageCircle,
+  Megaphone,
   Settings,
   ShoppingBag,
 } from "lucide-react";
@@ -33,6 +36,7 @@ export default async function MainLayout({
   if (!user) redirect("/login");
 
   // Super admin flag + active workspace context + membership list (for switcher)
+  const branding = await getPlatformBranding();
   const [{ data: userRow }, active, memberships] = await Promise.all([
     supabase
       .from("users")
@@ -59,9 +63,18 @@ export default async function MainLayout({
       >
         {/* Left: brand + workspace name */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-display text-base font-semibold text-primary tracking-tight shrink-0">
-            Agente WA
-          </span>
+          {branding.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external logo URL, no next/image loader configured
+            <img
+              src={branding.logo_url}
+              alt={branding.brand_name}
+              className="h-6 w-auto max-w-[140px] object-contain shrink-0"
+            />
+          ) : (
+            <span className="font-display text-base font-semibold text-primary tracking-tight shrink-0">
+              {branding.brand_name}
+            </span>
+          )}
           {workspaceName && (
             <>
               <span
@@ -129,6 +142,28 @@ export default async function MainLayout({
             </Button>
           </Link>
 
+          <Link href="/turnos">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <CalendarClock className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only sm:ml-2">Turnos</span>
+            </Button>
+          </Link>
+
+          <Link href="/campanas">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Megaphone className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only sm:ml-2">Campañas</span>
+            </Button>
+          </Link>
+
           <Link href="/dashboard">
             <Button
               variant="ghost"
@@ -190,6 +225,14 @@ export default async function MainLayout({
         >
           <ShoppingBag className="h-5 w-5" aria-hidden="true" />
           <span>Ventas</span>
+        </Link>
+
+        <Link
+          href="/campanas"
+          className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+        >
+          <Megaphone className="h-5 w-5" aria-hidden="true" />
+          <span>Campañas</span>
         </Link>
 
         <Link

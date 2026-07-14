@@ -31,6 +31,20 @@ function svc() {
   );
 }
 
+// A lone "BAJA"/"STOP"/"CANCELAR" (case/accents-insensitive) is a marketing
+// opt-out. Kept strict (exact word) so it doesn't trip on a sentence that
+// merely contains "baja".
+const OPT_OUT_WORDS = new Set(["baja", "stop", "cancelar", "unsubscribe"]);
+function isCampaignOptOut(text: string | null): boolean {
+  if (!text) return false;
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  return OPT_OUT_WORDS.has(normalized);
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const rawBody = await request.text();
@@ -164,6 +178,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Duplicate wamid — already processed
     if (!message) {
       return NextResponse.json({ received: true, dedup: true });
+    }
+
+    // Campaign opt-out: "BAJA" / "STOP" / "CANCELAR" opts the contact out of
+    // marketing campaigns (Meta compliance). Runs even if AI is off.
+    if (isCampaignOptOut(normalized.text)) {
+      await supabase
+        .from("contacts")
+        .update({ campaign_opt_out: true })
+        .eq("id", contact.id);
     }
 
     // Media handling (download + AI understanding) runs AFTER the response so

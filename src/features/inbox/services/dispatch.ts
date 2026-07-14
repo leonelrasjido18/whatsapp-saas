@@ -161,9 +161,36 @@ export async function dispatchText(
   // 1. Load conversation + contact in one query
   const ctx = await loadSendContext(conversationId, supabase);
 
-  // Format text per channel: WhatsApp gets *bold* syntax, Meta gets plain text
+  // Format text per channel: WhatsApp gets *bold* syntax, Meta/webchat plain
   const isMeta = ctx.channel === "facebook" || ctx.channel === "instagram";
-  const body = isMeta ? formatPlainText(rawBody) : formatWhatsAppMarkdown(rawBody);
+  const isWebchat = ctx.channel === "webchat";
+  const body =
+    isMeta || isWebchat
+      ? formatPlainText(rawBody)
+      : formatWhatsAppMarkdown(rawBody);
+
+  // Webchat has no external transport and no 24h window: the reply is just
+  // persisted and the browser widget polls for it. Handle it before the
+  // opt-in / window guards, which don't apply to an on-page web session.
+  if (isWebchat) {
+    const { error: insertError } = await supabase.from("messages").insert({
+      workspace_id: workspaceId,
+      conversation_id: conversationId,
+      direction: "out",
+      type: "text",
+      body,
+      status: "sent",
+      sender_user_id: senderUserId ?? null,
+    });
+    if (insertError) {
+      return { ok: false, error: insertError.message };
+    }
+    await supabase
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversationId);
+    return { ok: true };
+  }
 
   // SEC-10: Block outbound to opted-out contacts
   if (!ctx.optIn) {

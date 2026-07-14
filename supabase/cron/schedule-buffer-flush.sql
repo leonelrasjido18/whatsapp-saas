@@ -85,10 +85,71 @@ select cron.schedule(
   $job$
 );
 
+-- Commerce: reporte semanal de ROI al dueño (lunes 12:00 UTC / 09:00 ART).
+select cron.schedule(
+  'weekly-report',
+  '0 12 * * 1',            -- Mondays at 12:00 UTC
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/weekly-report',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Commerce: pedido de reseñas de Google post-venta (cada hora a los :45).
+select cron.schedule(
+  'review-request',
+  '45 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/review-request',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Campaigns: dispatch scheduled/sending campaigns in rate-limited batches (every minute).
+select cron.schedule(
+  'campaign-dispatch',
+  '* * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/campaign-dispatch',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Bookings: recordatorio de turnos ~24h antes (cada hora a los :10).
+select cron.schedule(
+  'appointment-reminders',
+  '10 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/appointment-reminders',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Loyalty: saludo de cumpleaños con cupón (diario 13:00 UTC / 10:00 ART).
+select cron.schedule(
+  'birthday-greetings',
+  '0 13 * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/birthday-greetings',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
 -- Verify they registered:
 --   select jobname, schedule, active from cron.job
 --   where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay',
---     'cart-abandonment', 'payment-reconciliation', 'reengagement');
+--     'cart-abandonment', 'payment-reconciliation', 'reengagement',
+--     'weekly-report');
 --
 -- Inspect recent runs / failures:
 --   select status, return_message, start_time

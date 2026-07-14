@@ -13,6 +13,8 @@ function localizeAuthError(msg: string): string {
     "Invalid login credentials": "Correo o contraseña incorrectos",
     "Email not confirmed": "Email no confirmado",
     "User already registered": "Este correo ya está registrado",
+    "email rate limit exceeded":
+      "Pediste el enlace demasiadas veces seguidas. Esperá unos minutos antes de volver a intentar.",
   };
   return map[msg] ?? msg;
 }

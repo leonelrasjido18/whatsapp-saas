@@ -12,7 +12,11 @@
       "Bash(vercel:*)",
       "Bash(brew install supabase/tap/supabase)",
       "Bash(npx tsc *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git add *)",
+      "Bash(git commit --amend -q -m ' *)"
     ]
   }
 }

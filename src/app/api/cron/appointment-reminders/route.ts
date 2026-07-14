@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     const to = new Date(now + 28 * 3600 * 1000).toISOString();
 
     const { data: appts } = await supabase
-      .from("appointments")
+      .from("bookings")
       .select("id, workspace_id, conversation_id, starts_at, customer_name")
       .eq("status", "confirmed")
       .is("reminder_sent_at", null)
@@ -57,7 +57,7 @@ export async function GET(req: Request) {
       }).catch(() => ({ ok: false as const }));
 
       await supabase
-        .from("appointments")
+        .from("bookings")
         .update({ reminder_sent_at: new Date().toISOString() })
         .eq("id", appt.id);
 

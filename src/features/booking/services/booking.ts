@@ -63,7 +63,7 @@ export async function computeAvailability(
       .select("weekday, start_time, end_time")
       .eq("workspace_id", workspaceId),
     supabase
-      .from("appointments")
+      .from("bookings")
       .select("starts_at, ends_at")
       .eq("workspace_id", workspaceId)
       .in("status", ["pending", "confirmed"])
@@ -180,7 +180,7 @@ export async function createAppointment(
 
   // Conflict check: any pending/confirmed appointment overlapping this window.
   const { data: conflicts } = await supabase
-    .from("appointments")
+    .from("bookings")
     .select("id, starts_at, ends_at")
     .eq("workspace_id", input.workspaceId)
     .in("status", ["pending", "confirmed"])
@@ -192,7 +192,7 @@ export async function createAppointment(
   }
 
   const { data, error } = await supabase
-    .from("appointments")
+    .from("bookings")
     .insert({
       workspace_id: input.workspaceId,
       contact_id: input.contactId,
@@ -219,7 +219,7 @@ export async function listUpcomingForContact(
   contactId: string,
 ): Promise<Appointment[]> {
   const { data } = await svc()
-    .from("appointments")
+    .from("bookings")
     .select("id, starts_at, ends_at, status, customer_name, service_id")
     .eq("workspace_id", workspaceId)
     .eq("contact_id", contactId)
@@ -234,7 +234,7 @@ export async function cancelAppointment(
   appointmentId: string,
 ): Promise<boolean> {
   const { error } = await svc()
-    .from("appointments")
+    .from("bookings")
     .update({ status: "cancelled" })
     .eq("workspace_id", workspaceId)
     .eq("id", appointmentId)
@@ -315,7 +315,7 @@ export async function listAppointmentsInRange(
   to: string,
 ): Promise<AppointmentDetail[]> {
   const { data } = await svc()
-    .from("appointments")
+    .from("bookings")
     .select(
       "id, starts_at, ends_at, status, customer_name, service_id, note, contact_id",
     )
@@ -332,7 +332,7 @@ export async function updateAppointmentStatus(
   status: "confirmed" | "cancelled" | "no_show" | "done",
 ): Promise<boolean> {
   const { error } = await svc()
-    .from("appointments")
+    .from("bookings")
     .update({ status })
     .eq("workspace_id", workspaceId)
     .eq("id", appointmentId);

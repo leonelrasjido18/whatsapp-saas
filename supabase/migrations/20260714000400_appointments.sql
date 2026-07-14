@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS public.availability_rules (
 CREATE INDEX IF NOT EXISTS idx_availability_rules_ws
   ON public.availability_rules(workspace_id, weekday);
 
-CREATE TABLE IF NOT EXISTS public.appointments (
+-- NOTE: named `bookings`, not `appointments`, because the foundation migration
+-- already defines an `appointments` table for the HighLevel scheduling flow
+-- (scheduled_at / hl_appointment_id). This native booking feature is separate.
+CREATE TABLE IF NOT EXISTS public.bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES public.contacts(id) ON DELETE SET NULL,
@@ -51,24 +54,24 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_appointments_ws_time
-  ON public.appointments(workspace_id, starts_at)
+CREATE INDEX IF NOT EXISTS idx_bookings_ws_time
+  ON public.bookings(workspace_id, starts_at)
   WHERE status IN ('pending', 'confirmed');
-CREATE INDEX IF NOT EXISTS idx_appointments_reminder
-  ON public.appointments(workspace_id, starts_at)
+CREATE INDEX IF NOT EXISTS idx_bookings_reminder
+  ON public.bookings(workspace_id, starts_at)
   WHERE status = 'confirmed' AND reminder_sent_at IS NULL;
 
 CREATE TRIGGER trg_booking_services_updated_at
   BEFORE UPDATE ON public.booking_services
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
-CREATE TRIGGER trg_appointments_updated_at
-  BEFORE UPDATE ON public.appointments
+CREATE TRIGGER trg_bookings_updated_at
+  BEFORE UPDATE ON public.bookings
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
 -- ── RLS ───────────────────────────────────────────────────────────────────────
 ALTER TABLE public.booking_services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.availability_rules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "ws members read booking_services" ON public.booking_services
   FOR SELECT USING (workspace_id IN (SELECT auth_workspace_ids()));
@@ -92,9 +95,9 @@ CREATE POLICY "ws admins manage availability_rules" ON public.availability_rules
     AND auth_has_role(workspace_id, ARRAY['admin','manager']::workspace_role[])
   );
 
-CREATE POLICY "ws members read appointments" ON public.appointments
+CREATE POLICY "ws members read bookings" ON public.bookings
   FOR SELECT USING (workspace_id IN (SELECT auth_workspace_ids()));
-CREATE POLICY "ws members manage appointments" ON public.appointments
+CREATE POLICY "ws members manage bookings" ON public.bookings
   FOR ALL USING (
     workspace_id IN (SELECT auth_workspace_ids())
     AND auth_has_role(workspace_id, ARRAY['admin','manager','agent']::workspace_role[])

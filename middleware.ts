@@ -54,8 +54,12 @@ export async function middleware(request: NextRequest) {
   ];
   // /pago/* is public too: the customer returning from a MercadoPago checkout
   // is an anonymous WhatsApp user with no session (prefix match — has subpaths).
+  // /auth/* handles Supabase email-link callbacks (password reset, etc.) — the
+  // visitor has no session yet when they land there.
   const isPublicRoute =
-    publicRoutes.includes(pathname) || pathname.startsWith("/pago/");
+    publicRoutes.includes(pathname) ||
+    pathname.startsWith("/pago/") ||
+    pathname.startsWith("/auth/");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

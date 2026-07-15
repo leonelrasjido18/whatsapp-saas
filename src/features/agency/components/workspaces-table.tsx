@@ -19,7 +19,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateWorkspaceSheet } from "./create-workspace-sheet";
 import { switchWorkspace } from "@/features/workspace/services/actions";
-import { deleteWorkspaceForClient } from "../services/agency-actions";
+import {
+  deleteWorkspaceForClient,
+  updateWorkspaceBusinessType,
+} from "../services/agency-actions";
+import { BUSINESS_TYPES, type BusinessType } from "@/features/workspace/lib/business-type";
 import { cn } from "@/lib/utils";
 import type { WorkspaceWithStats } from "../types";
 
@@ -67,6 +71,18 @@ export function WorkspacesTable({ workspaces }: Props) {
         return;
       }
       router.push(to);
+    });
+  }
+
+  function handleTypeChange(workspaceId: string, type: BusinessType) {
+    startRefresh(async () => {
+      const result = await updateWorkspaceBusinessType(workspaceId, type);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Tipo de negocio actualizado");
+      router.refresh();
     });
   }
 
@@ -171,7 +187,7 @@ export function WorkspacesTable({ workspaces }: Props) {
               "hover:bg-muted/20 transition-colors duration-150",
             )}
           >
-            {/* Workspace name + slug */}
+            {/* Workspace name + slug + business type */}
             <div className="min-w-0">
               <p className="font-display text-sm font-semibold text-foreground truncate">
                 {workspace.name}
@@ -179,6 +195,22 @@ export function WorkspacesTable({ workspaces }: Props) {
               <p className="font-mono text-xs text-muted-foreground mt-0.5">
                 {workspace.slug}
               </p>
+              <select
+                value={workspace.business_type}
+                onChange={(e) =>
+                  handleTypeChange(workspace.id, e.target.value as BusinessType)
+                }
+                disabled={refreshing}
+                aria-label={`Tipo de negocio de ${workspace.name}`}
+                className="mt-1.5 h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {BUSINESS_TYPES.map((bt) => (
+                  <option key={bt.value} value={bt.value}>
+                    {bt.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Miembros */}

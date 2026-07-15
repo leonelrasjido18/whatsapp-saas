@@ -10,6 +10,7 @@ export interface WorkspaceWithStats {
   ycloud_connected: boolean;
   plan_tier: PlanTier;
   subscription_status: SubscriptionStatus;
+  business_type: "comercio" | "servicios" | "general";
   last_payment_date?: string;
   last_payment_amount?: number;
 }
@@ -18,7 +19,8 @@ export type UseCase = "setter" | "soporte" | "agendamiento" | "general";
 
 export interface CreateWorkspaceInput {
   name: string;
-  useCase: UseCase;
+  /** Vertical that drives which modules the client sees. */
+  businessType: "comercio" | "servicios" | "general";
   clientEmail?: string;
   /** Optional password for the client account; auto-generated if omitted. */
   clientPassword?: string;

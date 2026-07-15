@@ -21,7 +21,10 @@ import {
 } from "@/components/ui/select";
 import { Copy, CheckCheck } from "lucide-react";
 import { createWorkspaceForClient } from "../services/agency-actions";
-import type { UseCase } from "../types";
+import {
+  BUSINESS_TYPES,
+  type BusinessType,
+} from "@/features/workspace/lib/business-type";
 
 interface Props {
   open: boolean;
@@ -29,34 +32,11 @@ interface Props {
   onCreated: () => void;
 }
 
-const USE_CASES: { value: UseCase; label: string; description: string }[] = [
-  {
-    value: "setter",
-    label: "Setter",
-    description: "Calificación de leads y agendamiento",
-  },
-  {
-    value: "soporte",
-    label: "Soporte",
-    description: "Atención al cliente y resolución de problemas",
-  },
-  {
-    value: "agendamiento",
-    label: "Agendamiento",
-    description: "Reservas y recordatorios",
-  },
-  {
-    value: "general",
-    label: "General",
-    description: "Asistente virtual multipropósito",
-  },
-];
-
 export function CreateWorkspaceSheet({ open, onClose, onCreated }: Props) {
   const [name, setName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPassword, setClientPassword] = useState("");
-  const [useCase, setUseCase] = useState<UseCase>("general");
+  const [businessType, setBusinessType] = useState<BusinessType>("comercio");
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<{
     email: string;
@@ -71,7 +51,7 @@ export function CreateWorkspaceSheet({ open, onClose, onCreated }: Props) {
     setName("");
     setClientEmail("");
     setClientPassword("");
-    setUseCase("general");
+    setBusinessType("comercio");
     setWebhookUrl(null);
     setCredentials(null);
     setCopied(false);
@@ -100,7 +80,7 @@ export function CreateWorkspaceSheet({ open, onClose, onCreated }: Props) {
     startSave(async () => {
       const result = await createWorkspaceForClient({
         name,
-        useCase,
+        businessType,
         clientEmail: clientEmail || undefined,
         clientPassword: clientPassword || undefined,
       });
@@ -284,30 +264,34 @@ export function CreateWorkspaceSheet({ open, onClose, onCreated }: Props) {
 
             <div className="space-y-2">
               <Label
-                htmlFor="ws-usecase"
+                htmlFor="ws-business-type"
                 className="text-sm font-medium text-foreground"
               >
-                Caso de uso
+                Tipo de negocio
               </Label>
               <Select
-                value={useCase}
-                onValueChange={(v) => setUseCase(v as UseCase)}
+                value={businessType}
+                onValueChange={(v) => setBusinessType(v as BusinessType)}
                 disabled={saving}
               >
-                <SelectTrigger id="ws-usecase">
+                <SelectTrigger id="ws-business-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {USE_CASES.map((uc) => (
-                    <SelectItem key={uc.value} value={uc.value}>
-                      <span className="font-medium">{uc.label}</span>
+                  {BUSINESS_TYPES.map((bt) => (
+                    <SelectItem key={bt.value} value={bt.value}>
+                      <span className="font-medium">{bt.label}</span>
                       <span className="ml-1.5 text-muted-foreground text-xs">
-                        — {uc.description}
+                        — {bt.description}
                       </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Define qué módulos ve el cliente (Ventas o Turnos) y activa las
+                herramientas correctas del agente.
+              </p>
             </div>
 
             <Button

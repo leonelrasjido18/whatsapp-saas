@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveWorkspace } from "@/features/workspace/services/active-workspace";
 import { getPlan } from "@/features/billing/plans";
+import { showsCommerce } from "@/features/workspace/lib/business-type";
 import VentasShell from "./ventas-shell";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,9 @@ export default async function VentasPage() {
 
   const active = await getActiveWorkspace(supabase, user.id);
   if (!active) redirect("/dashboard");
+
+  // El módulo de ventas solo aplica a comercios (o general).
+  if (!showsCommerce(active.business_type)) redirect("/dashboard");
 
   // Verificar plan
   const { data: wsRow } = await supabase

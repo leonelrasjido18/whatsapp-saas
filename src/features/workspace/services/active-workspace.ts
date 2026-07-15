@@ -1,10 +1,22 @@
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  normalizeBusinessType,
+  type BusinessType,
+} from "@/features/workspace/lib/business-type";
 
 export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_id";
 
-export type MembershipRow = { workspace_id: string; role: string };
-export type ActiveWorkspace = { workspace_id: string; role: string };
+export type MembershipRow = {
+  workspace_id: string;
+  role: string;
+  workspaces?: { business_type?: string } | null;
+};
+export type ActiveWorkspace = {
+  workspace_id: string;
+  role: string;
+  business_type: BusinessType;
+};
 
 /**
  * Resolves the user's active workspace context.
@@ -21,7 +33,7 @@ export async function getActiveWorkspace(
 ): Promise<ActiveWorkspace | null> {
   const { data: memberships } = await supabase
     .from("memberships")
-    .select("workspace_id, role")
+    .select("workspace_id, role, workspaces(business_type)")
     .eq("user_id", userId)
     .eq("is_active", true);
 
@@ -34,7 +46,11 @@ export async function getActiveWorkspace(
     : undefined;
 
   const chosen = match ?? rows[0];
-  return { workspace_id: chosen.workspace_id, role: chosen.role };
+  return {
+    workspace_id: chosen.workspace_id,
+    role: chosen.role,
+    business_type: normalizeBusinessType(chosen.workspaces?.business_type),
+  };
 }
 
 /** Lists the user's active memberships with workspace names — for the switcher. */

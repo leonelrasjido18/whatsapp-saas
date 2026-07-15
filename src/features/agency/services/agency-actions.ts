@@ -4,6 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { provisionWorkspaceUser } from "@/lib/auth/provision-user";
+import {
+  resolveUseCase,
+  defaultToolKeysForBusinessType,
+} from "@/features/workspace/lib/business-type";
 import type {
   ClientCredentials,
   CreateWorkspaceResult,
@@ -16,7 +20,7 @@ import type { PlanTier, SubscriptionStatus } from "@/shared/types/billing";
 
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(1, "El nombre es requerido").max(80),
-  useCase: z.enum(["setter", "soporte", "agendamiento", "general"]),
+  businessType: z.enum(["comercio", "servicios", "general"]),
   clientEmail: z.string().email("Email inválido").optional().or(z.literal("")),
   clientPassword: z
     .string()
@@ -75,7 +79,9 @@ export async function createWorkspaceForClient(
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { name, useCase, clientEmail, clientPassword } = parsed.data;
+  const { name, businessType, clientEmail, clientPassword } = parsed.data;
+  // The agent prompt/active agent is derived from the business type.
+  const useCase = resolveUseCase(businessType);
   const service = svc();
   let clientCredentials: ClientCredentials | null = null;
 
@@ -87,7 +93,7 @@ export async function createWorkspaceForClient(
 
   const { data: workspace, error: wsError } = await service
     .from("workspaces")
-    .insert({ name, slug })
+    .insert({ name, slug, business_type: businessType })
     .select("id")
     .single();
 
@@ -263,6 +269,31 @@ export async function createWorkspaceForClient(
     });
   }
 
+  // Enable the default agent tools for this business type so the client's
+  // agent can sell (comercio) or book (servicios) out of the box. Best-effort:
+  // a failure here never blocks workspace creation.
+  try {
+    const toolKeys = defaultToolKeysForBusinessType(businessType);
+    if (toolKeys.length > 0) {
+      const { data: toolRows } = await service
+        .from("tools")
+        .select("id, key")
+        .in("key", toolKeys);
+      const rows = (toolRows ?? []).map((t) => ({
+        workspace_id: workspaceId,
+        tool_id: (t as { id: string }).id,
+        enabled: true,
+      }));
+      if (rows.length > 0) {
+        await service
+          .from("tool_configs")
+          .upsert(rows, { onConflict: "workspace_id,tool_id", ignoreDuplicates: true });
+      }
+    }
+  } catch (err) {
+    console.error("[agency] default tool_configs seed error:", err);
+  }
+
   // Fail loud instead of shipping a dead placeholder host to the client.
   // In dev, fall back to localhost so local testing works.
   const baseUrl =
@@ -312,7 +343,9 @@ export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> 
   // Fetch all workspaces with billing info
   const { data: workspaces, error: wsError } = await service
     .from("workspaces")
-    .select("id, name, slug, created_at, plan_tier, subscription_status")
+    .select(
+      "id, name, slug, created_at, plan_tier, subscription_status, business_type",
+    )
     .order("created_at", { ascending: false });
 
   if (wsError) {
@@ -397,6 +430,7 @@ export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> 
       created_at: string;
       plan_tier: string;
       subscription_status: string;
+      business_type: string | null;
     }[]
   ).map((w) => ({
     id: w.id,
@@ -405,6 +439,7 @@ export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> 
     created_at: w.created_at,
     plan_tier: w.plan_tier as PlanTier,
     subscription_status: w.subscription_status as SubscriptionStatus,
+    business_type: (w.business_type as WorkspaceWithStats["business_type"]) ?? "general",
     member_count: memberMap.get(w.id) ?? 0,
     conversation_count: convMap.get(w.id) ?? 0,
     ycloud_connected: ycloudMap.get(w.id) ?? false,
@@ -413,4 +448,31 @@ export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> 
   }));
 
   return { workspaces: result };
+}
+
+/**
+ * Changes a client workspace's business type (Comercio / Servicios / General),
+ * which drives module visibility. Super-admin only.
+ */
+export async function updateWorkspaceBusinessType(
+  workspaceId: string,
+  businessType: "comercio" | "servicios" | "general",
+): Promise<{ error?: string; ok?: boolean }> {
+  const userId = await assertSuperAdmin();
+  if (!userId) return { error: "No autorizado" };
+
+  if (!["comercio", "servicios", "general"].includes(businessType)) {
+    return { error: "Tipo de negocio inválido" };
+  }
+
+  const { error } = await svc()
+    .from("workspaces")
+    .update({ business_type: businessType })
+    .eq("id", workspaceId);
+
+  if (error) {
+    console.error("[agency] update business_type error:", error);
+    return { error: "Error al actualizar el tipo de negocio" };
+  }
+  return { ok: true };
 }

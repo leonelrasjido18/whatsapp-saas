@@ -116,6 +116,7 @@ export default async function SettingsPage() {
     <SettingsShell
       workspaceId={workspaceId}
       role={membership.role as string}
+      businessType={membership.business_type}
       initialBusinessInfo={biData ?? null}
       initialTools={toolsWithEnabled}
       initialIntegrations={maskedIntegrations}

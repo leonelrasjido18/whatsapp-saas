@@ -7,6 +7,10 @@ import {
 } from "@/features/workspace/services/active-workspace";
 import { WorkspaceSwitcher } from "@/features/workspace/components/workspace-switcher";
 import { getPlatformBranding } from "@/features/agency/services/branding";
+import {
+  showsCommerce,
+  showsBookings,
+} from "@/features/workspace/lib/business-type";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -51,6 +55,11 @@ export default async function MainLayout({
   const activeId = active?.workspace_id ?? null;
   const workspaceName =
     memberships.find((m) => m.workspace_id === activeId)?.name ?? null;
+
+  // Module visibility by business type (default to showing everything).
+  const businessType = active?.business_type ?? "general";
+  const showCommerce = showsCommerce(businessType);
+  const showBookings = showsBookings(businessType);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -131,27 +140,31 @@ export default async function MainLayout({
             </Button>
           </Link>
 
-          <Link href="/ventas">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ShoppingBag className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only sm:ml-2">Ventas</span>
-            </Button>
-          </Link>
+          {showCommerce && (
+            <Link href="/ventas">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only sm:ml-2">Ventas</span>
+              </Button>
+            </Link>
+          )}
 
-          <Link href="/turnos">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <CalendarClock className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only sm:ml-2">Turnos</span>
-            </Button>
-          </Link>
+          {showBookings && (
+            <Link href="/turnos">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only sm:ml-2">Turnos</span>
+              </Button>
+            </Link>
+          )}
 
           <Link href="/campanas">
             <Button
@@ -219,13 +232,25 @@ export default async function MainLayout({
           <span>Inbox</span>
         </Link>
 
-        <Link
-          href="/ventas"
-          className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-        >
-          <ShoppingBag className="h-5 w-5" aria-hidden="true" />
-          <span>Ventas</span>
-        </Link>
+        {showCommerce && (
+          <Link
+            href="/ventas"
+            className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+          >
+            <ShoppingBag className="h-5 w-5" aria-hidden="true" />
+            <span>Ventas</span>
+          </Link>
+        )}
+
+        {showBookings && (
+          <Link
+            href="/turnos"
+            className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+          >
+            <CalendarClock className="h-5 w-5" aria-hidden="true" />
+            <span>Turnos</span>
+          </Link>
+        )}
 
         <Link
           href="/campanas"

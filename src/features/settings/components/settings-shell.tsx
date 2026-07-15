@@ -13,6 +13,10 @@ import { WebchatTab } from "./webchat-tab";
 import { CouponsTab } from "./coupons-tab";
 import { AgentsTab } from "@/features/agents/components/agents-tab";
 import type { AgentDto } from "@/features/agents/types";
+import {
+  showsCommerce,
+  type BusinessType,
+} from "@/features/workspace/lib/business-type";
 
 interface ToolItem {
   id: string;
@@ -27,6 +31,7 @@ interface ToolItem {
 interface Props {
   workspaceId: string;
   role: string;
+  businessType?: BusinessType;
   initialBusinessInfo: Record<string, unknown> | null;
   initialTools: ToolItem[];
   initialIntegrations: unknown[];
@@ -36,12 +41,15 @@ interface Props {
 
 export function SettingsShell({
   workspaceId,
+  businessType = "general",
   initialBusinessInfo,
   initialTools,
   initialIntegrations,
   initialTemplates = [],
   initialAgents = [],
 }: Props) {
+  // Coupons only make sense where there are orders to discount (commerce).
+  const showCoupons = showsCommerce(businessType);
   const biForForm = initialBusinessInfo as {
     structured: Record<string, unknown>;
     free_text: string | null;
@@ -66,7 +74,7 @@ export function SettingsShell({
             <TabsTrigger value="knowledge-base">Knowledge Base</TabsTrigger>
             <TabsTrigger value="resenas">Reseñas</TabsTrigger>
             <TabsTrigger value="webchat">Widget Web</TabsTrigger>
-            <TabsTrigger value="cupones">Cupones</TabsTrigger>
+            {showCoupons && <TabsTrigger value="cupones">Cupones</TabsTrigger>}
             <TabsTrigger value="equipo">Equipo</TabsTrigger>
             <TabsTrigger value="automatizaciones">Automatizaciones</TabsTrigger>
           </TabsList>
@@ -131,11 +139,13 @@ export function SettingsShell({
           </div>
         </TabsContent>
 
-        <TabsContent value="cupones">
-          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
-            <CouponsTab workspaceId={workspaceId} />
-          </div>
-        </TabsContent>
+        {showCoupons && (
+          <TabsContent value="cupones">
+            <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+              <CouponsTab workspaceId={workspaceId} />
+            </div>
+          </TabsContent>
+        )}
 
         <TabsContent value="equipo">
           <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">

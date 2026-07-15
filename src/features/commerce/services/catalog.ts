@@ -31,6 +31,23 @@ export async function createProduct(
   return data as Product;
 }
 
+export async function updateProduct(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  productId: string,
+  patch: Record<string, unknown>
+): Promise<Product> {
+  const { data, error } = await supabase
+    .from("products")
+    .update(patch)
+    .eq("id", productId)
+    .eq("workspace_id", workspaceId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Product;
+}
+
 export async function getCategories(
   supabase: SupabaseClient,
   workspaceId: string

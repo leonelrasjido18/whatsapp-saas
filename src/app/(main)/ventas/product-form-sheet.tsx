@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
+import { ImagePlus, Loader2, X } from "lucide-react";
 import { Product } from "@/features/commerce/types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -14,23 +16,95 @@ interface ProductFormSheetProps {
   onSuccess: () => void;
 }
 
+interface ProductImage {
+  path: string;
+  url: string; // signed URL for preview
+}
+
 export default function ProductFormSheet({ isOpen, onClose, workspaceId, product, onSuccess }: ProductFormSheetProps) {
   const [loading, setLoading] = useState(false);
+  const [images, setImages] = useState<ProductImage[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isEdit = !!product;
+
+  // Load existing product images (fetch signed URLs for their stored paths).
+  const loadExistingImages = useCallback(async () => {
+    const paths = product?.image_paths ?? [];
+    if (paths.length === 0) {
+      setImages([]);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/workspace/${workspaceId}/catalog/products/image`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paths }),
+        },
+      );
+      const json = (await res.json()) as { data?: string[] };
+      const urls = json.data ?? [];
+      setImages(paths.map((path, i) => ({ path, url: urls[i] ?? "" })));
+    } catch {
+      setImages(paths.map((path) => ({ path, url: "" })));
+    }
+  }, [product, workspaceId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync images to the product being edited
+      loadExistingImages();
+    }
+  }, [isOpen, loadExistingImages]);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(
+          `/api/workspace/${workspaceId}/catalog/products/image/upload`,
+          { method: "POST", body: formData },
+        );
+        const json = (await res.json()) as {
+          data?: { path: string; url: string };
+          error?: string;
+        };
+        if (!res.ok || !json.data) {
+          throw new Error(json.error ?? "No se pudo subir la imagen");
+        }
+        setImages((prev) => [...prev, json.data!]);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removeImage(path: string) {
+    setImages((prev) => prev.filter((img) => img.path !== path));
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const type = formData.get("type") as "product" | "service";
-    
+
     const payload = {
       name: formData.get("name"),
       type,
       sku: formData.get("sku") || undefined,
       price: parseFloat(formData.get("price") as string),
       stock_qty: type === "product" ? parseInt(formData.get("stock_qty") as string) : null,
+      image_paths: images.map((img) => img.path),
       is_active: true,
     };
 
@@ -41,17 +115,17 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(isEdit ? { id: product.id, ...payload } : payload)
       });
-      
+
       if (res.ok) {
         onSuccess();
         onClose();
       } else {
         const error = await res.json();
-        alert(error.error || "Error guardando el producto");
+        toast.error(error.error || "Error guardando el producto");
       }
     } catch (e) {
       console.error(e);
-      alert("Error inesperado");
+      toast.error("Error inesperado");
     } finally {
       setLoading(false);
     }
@@ -63,8 +137,61 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
         <SheetHeader>
           <SheetTitle>{isEdit ? "Editar" : "Nuevo"} Producto o Servicio</SheetTitle>
         </SheetHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+          {/* Fotos del producto */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fotos</label>
+            <p className="text-xs text-muted-foreground">
+              La IA las envía cuando un cliente pregunta por el producto.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {images.map((img) => (
+                <div
+                  key={img.path}
+                  className="relative h-20 w-20 rounded-md border border-border overflow-hidden bg-muted"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- signed Storage URL, no next/image loader */}
+                  <img
+                    src={img.url}
+                    alt="Foto del producto"
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(img.path)}
+                    aria-label="Quitar foto"
+                    className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 text-foreground hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="h-20 w-20 rounded-md border-2 border-dashed border-border flex items-center justify-center text-muted-foreground hover:border-foreground/40 transition-colors disabled:opacity-50"
+                aria-label="Agregar foto"
+              >
+                {uploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <ImagePlus className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFiles(e.target.files)}
+            />
+          </div>
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Tipo</label>
             <select name="type" defaultValue={product?.type || "product"} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
@@ -72,17 +199,17 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
               <option value="service">Servicio</option>
             </select>
           </div>
-          
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Nombre *</label>
             <Input name="name" defaultValue={product?.name || ""} required />
           </div>
-          
+
           <div className="space-y-2">
             <label className="text-sm font-medium">SKU (opcional)</label>
             <Input name="sku" defaultValue={product?.sku || ""} />
           </div>
-          
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Precio (ARS) *</label>
             <Input name="price" type="number" step="0.01" min="0" defaultValue={product?.price || ""} required />

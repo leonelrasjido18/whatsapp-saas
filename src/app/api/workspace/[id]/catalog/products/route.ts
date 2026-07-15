@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { requireWorkspaceMember, requireWorkspaceFeature, readJsonBody } from "@/lib/auth/workspace-access";
-import { getProducts, createProduct } from "@/features/commerce/services/catalog";
+import {
+  getProducts,
+  createProduct,
+  updateProduct,
+} from "@/features/commerce/services/catalog";
 
 function svc() {
   return createSbClient(
@@ -70,5 +74,49 @@ export async function POST(
   } catch (error) {
     console.error("[POST products]:", error);
     return NextResponse.json({ error: "Error al crear el producto" }, { status: 500 });
+  }
+}
+
+const UpdateProductSchema = z.object({
+  id: z.string().uuid(),
+  type: z.enum(["product", "service"]).optional(),
+  name: z.string().min(1).max(512).optional(),
+  description: z.string().nullable().optional(),
+  category_id: z.string().uuid().nullable().optional(),
+  sku: z.string().nullable().optional(),
+  price: z.number().min(0).optional(),
+  stock_qty: z.number().nullable().optional(),
+  image_paths: z.array(z.string()).optional(),
+  is_active: z.boolean().optional(),
+});
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: workspaceId } = await params;
+
+  const auth = await requireWorkspaceMember(workspaceId, { minRole: "manager" });
+  if (!auth.ok) return auth.response;
+
+  const feat = await requireWorkspaceFeature(workspaceId, "catalog_sales");
+  if (!feat.ok) return feat.response;
+
+  const parsed = await readJsonBody(req);
+  if (!parsed.ok) return parsed.response;
+
+  const body = UpdateProductSchema.safeParse(parsed.body);
+  if (!body.success) {
+    return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
+  }
+
+  const { id, ...patch } = body.data;
+
+  try {
+    const product = await updateProduct(svc(), workspaceId, id, patch);
+    return NextResponse.json({ data: product });
+  } catch (error) {
+    console.error("[PATCH products]:", error);
+    return NextResponse.json({ error: "Error al actualizar el producto" }, { status: 500 });
   }
 }

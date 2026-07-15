@@ -3,6 +3,7 @@ import { createClient as createSbClient } from "@supabase/supabase-js";
 import { Tool } from "../core/tool";
 import { getOrder } from "@/features/commerce/services/orders";
 import { createCheckoutPreference } from "@/features/commerce/services/mercadopago";
+import { getValidMpAccessToken } from "@/features/commerce/services/mercadopago-oauth";
 import { hasFeature } from "@/features/billing/plans";
 import type { PlanTier } from "@/features/billing/plans";
 
@@ -32,28 +33,18 @@ export const generatePaymentLinkTool: Tool<z.infer<typeof schema>> = {
       .eq("id", workspaceId)
       .single();
 
-    const { data: integration } = await supabase
-      .from("integrations")
-      .select("credentials")
-      .eq("workspace_id", workspaceId)
-      .eq("provider", "mercadopago")
-      .single();
-
-    if (!integration?.credentials?.mp_access_token) return false;
+    const mpToken = await getValidMpAccessToken(supabase, workspaceId);
+    if (!mpToken) return false;
     return hasFeature((wsData?.plan_tier as PlanTier) ?? "starter", "merchant_payments");
   },
   run: async (args, ctx) => {
     try {
       const supabase = svc();
 
-      const { data: integration } = await supabase
-        .from("integrations")
-        .select("credentials")
-        .eq("workspace_id", ctx.workspaceId)
-        .eq("provider", "mercadopago")
-        .single();
-
-      const mp_access_token = integration?.credentials?.mp_access_token;
+      const mp_access_token = await getValidMpAccessToken(
+        supabase,
+        ctx.workspaceId,
+      );
 
       if (!mp_access_token) {
         return {
@@ -84,7 +75,7 @@ export const generatePaymentLinkTool: Tool<z.infer<typeof schema>> = {
       }
 
       const preference = await createCheckoutPreference(
-        String(mp_access_token),
+        mp_access_token,
         order,
         ctx.workspaceId
       );

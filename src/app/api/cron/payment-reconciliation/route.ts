@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { findApprovedPayment } from "@/features/commerce/services/mercadopago";
+import { getValidMpAccessToken } from "@/features/commerce/services/mercadopago-oauth";
 import { applyOrderPayment } from "@/features/commerce/services/orders";
 import { dispatchText } from "@/features/inbox/services/dispatch";
 
@@ -41,14 +42,8 @@ export async function GET(req: Request) {
     const tokenCache = new Map<string, string | null>();
     async function getToken(wsId: string): Promise<string | null> {
       if (tokenCache.has(wsId)) return tokenCache.get(wsId)!;
-      const { data: integration } = await supabase
-        .from("integrations")
-        .select("credentials")
-        .eq("workspace_id", wsId)
-        .eq("provider", "mercadopago")
-        .single();
-      const token =
-        (integration?.credentials?.mp_access_token as string | undefined) ?? null;
+      // OAuth token (auto-refreshed) o el token manual (legacy).
+      const token = await getValidMpAccessToken(supabase, wsId);
       tokenCache.set(wsId, token);
       return token;
     }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { createHmac } from "node:crypto";
 import { getPayment } from "@/features/commerce/services/mercadopago";
+import { getValidMpAccessToken } from "@/features/commerce/services/mercadopago-oauth";
 import { applyOrderPayment, refundOrder } from "@/features/commerce/services/orders";
 import { dispatchText } from "@/features/inbox/services/dispatch";
 
@@ -67,8 +68,9 @@ export async function POST(req: NextRequest) {
       .eq("provider", "mercadopago")
       .single();
 
-    const mp_access_token = integration?.credentials?.mp_access_token;
     const mp_webhook_secret = integration?.credentials?.mp_webhook_secret;
+    // OAuth token (auto-refreshed) or the legacy manually-pasted token.
+    const mp_access_token = await getValidMpAccessToken(supabase, workspaceId);
 
     if (!mp_access_token) {
       console.error("[Commerce MP Webhook] Workspace missing MP token");

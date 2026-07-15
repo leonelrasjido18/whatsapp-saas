@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCheckoutPreference } from "@/features/commerce/services/mercadopago";
+import { getValidMpAccessToken } from "@/features/commerce/services/mercadopago-oauth";
 import { requireWorkspaceMember } from "@/lib/auth/workspace-access";
 
 export async function POST(
@@ -36,22 +37,15 @@ export async function POST(
       return NextResponse.json({ error: "La orden no está pendiente" }, { status: 400 });
     }
 
-    // 2. Obtener credenciales de MercadoPago
-    const { data: integration, error: intError } = await supabase
-      .from("integrations")
-      .select("credentials")
-      .eq("workspace_id", workspaceId)
-      .eq("provider", "mercadopago")
-      .single();
-
-    const mp_access_token = integration?.credentials?.mp_access_token;
+    // 2. Obtener el access token de MercadoPago (OAuth con refresh, o el manual)
+    const mp_access_token = await getValidMpAccessToken(supabase, workspaceId);
     if (!mp_access_token) {
       return NextResponse.json({ error: "Falta configurar MercadoPago" }, { status: 400 });
     }
 
     // 3. Generar la preferencia de pago
     const preference = await createCheckoutPreference(
-      String(mp_access_token),
+      mp_access_token,
       order as any,
       workspaceId
     );

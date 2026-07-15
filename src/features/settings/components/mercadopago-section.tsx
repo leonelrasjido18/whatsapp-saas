@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, ChevronDown, ChevronRight, CheckCircle2, Copy } from "lucide-react";
+import {
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle2,
+  Link2,
+  Unlink,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,15 +50,9 @@ function Section({
           <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
         </div>
         {open ? (
-          <ChevronDown
-            className="h-4 w-4 text-muted-foreground shrink-0"
-            aria-hidden
-          />
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
         ) : (
-          <ChevronRight
-            className="h-4 w-4 text-muted-foreground shrink-0"
-            aria-hidden
-          />
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
         )}
       </button>
 
@@ -69,28 +70,35 @@ export function MercadoPagoSection({
   initial: IntegrationData | undefined;
   onSaved: () => void;
 }) {
+  // Connected via OAuth when the masked oauth_tokens object has any keys.
+  const connected = Boolean(
+    initial?.oauth_tokens && Object.keys(initial.oauth_tokens).length > 0,
+  );
+
   const [accessToken, setAccessToken] = useState(
     initial?.credentials?.mp_access_token ?? "",
   );
-  const [webhookSecret, setWebhookSecret] = useState(
-    initial?.credentials?.mp_webhook_secret ?? "",
-  );
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
-  const webhookUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/api/webhooks/commerce-mp?workspace_id=${workspaceId}`
-      : `/api/webhooks/commerce-mp?workspace_id=${workspaceId}`;
-
-  function handleCopy() {
-    navigator.clipboard.writeText(webhookUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    try {
+      const res = await fetch(
+        `/api/integrations/mercadopago/disconnect?wsid=${workspaceId}`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error();
+      toast.success("MercadoPago desconectado");
+      onSaved();
+    } catch {
+      toast.error("No se pudo desconectar");
+    } finally {
+      setDisconnecting(false);
+    }
   }
 
-  async function handleSave() {
+  async function handleSaveManual() {
     setSaving(true);
     try {
       const res = await fetch(`/api/workspace/${workspaceId}/integrations`, {
@@ -99,16 +107,13 @@ export function MercadoPagoSection({
         body: JSON.stringify({
           provider: "mercadopago",
           enabled: true,
-          credentials: {
-            mp_access_token: accessToken,
-            mp_webhook_secret: webhookSecret,
-          },
+          credentials: { mp_access_token: accessToken },
           config: {},
         }),
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
       if (json.ok) {
-        toast.success("Configuración de MercadoPago guardada");
+        toast.success("Access Token guardado");
         onSaved();
       } else {
         toast.error(json.error ?? "Error al guardar");
@@ -123,11 +128,58 @@ export function MercadoPagoSection({
   return (
     <Section
       title="MercadoPago"
-      description="Conecta tu cuenta de MercadoPago para cobrar pedidos desde el chat usando Checkout Pro."
+      description="Conecta tu cuenta de MercadoPago para cobrar pedidos desde el chat."
     >
-      <div className="grid gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="mp-access-token">Access Token</Label>
+      {/* Estado de conexión + botón principal */}
+      {connected ? (
+        <div className="flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-success" aria-hidden />
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Cuenta conectada
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Los pagos se acreditan directo en tu cuenta de MercadoPago.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+          >
+            {disconnecting ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden />
+            ) : (
+              <Unlink className="h-4 w-4 mr-1.5" aria-hidden />
+            )}
+            Desconectar
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+          <p className="text-sm text-foreground">
+            Conectá tu cuenta con un clic. Te llevamos a MercadoPago, iniciás
+            sesión y autorizás — sin copiar claves ni configurar nada.
+          </p>
+          <Button asChild>
+            <a href={`/api/integrations/mercadopago/start?wsid=${workspaceId}`}>
+              <Link2 className="h-4 w-4 mr-1.5" aria-hidden />
+              Conectar con Mercado Pago
+            </a>
+          </Button>
+        </div>
+      )}
+
+      {/* Opción avanzada: pegar el Access Token manualmente (fallback) */}
+      <details className="group">
+        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground select-none">
+          Opción avanzada: pegar el Access Token manualmente
+        </summary>
+        <div className="mt-3 space-y-2">
+          <Label htmlFor="mp-access-token">Access Token de producción</Label>
           <Input
             id="mp-access-token"
             type="password"
@@ -137,68 +189,21 @@ export function MercadoPagoSection({
             autoComplete="off"
           />
           <p className="text-xs text-muted-foreground">
-            Encuentra tu Access Token de Producción en el panel de desarrolladores de MercadoPago.
+            Solo si preferís no usar la conexión con un clic. Lo encontrás en el
+            panel de desarrolladores de MercadoPago.
           </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="mp-webhook-secret">Webhook Secret (HMAC)</Label>
-          <Input
-            id="mp-webhook-secret"
-            type="password"
-            placeholder="Introduce el secret provisto por MP"
-            value={webhookSecret}
-            onChange={(e) => setWebhookSecret(e.target.value)}
-            autoComplete="off"
-          />
-          <p className="text-xs text-muted-foreground">
-            Opcional pero recomendado para mayor seguridad.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Webhook URL</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={webhookUrl}
-              className="font-mono text-xs text-muted-foreground"
-              aria-label="Webhook URL (solo lectura)"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleCopy}
-              aria-label="Copiar URL del webhook"
-            >
-              {copied ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" aria-hidden />
-              ) : (
-                <Copy className="h-4 w-4" aria-hidden />
-              )}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Configura las Notificaciones Webhook (Topic: payment) apuntando a esta URL.
-          </p>
-        </div>
-
-        <div className="pt-2">
           <Button
             type="button"
             size="sm"
-            onClick={handleSave}
+            variant="outline"
+            onClick={handleSaveManual}
             disabled={saving}
-            aria-busy={saving}
           >
-            {saving && (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
-            )}
-            Guardar
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />}
+            Guardar token manual
           </Button>
         </div>
-      </div>
+      </details>
     </Section>
   );
 }

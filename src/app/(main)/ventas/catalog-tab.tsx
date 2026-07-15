@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Search, FileSpreadsheet } from "lucide-react";
+import { toast } from "sonner";
+import { Plus, Search, FileSpreadsheet, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Product } from "@/features/commerce/types";
@@ -18,8 +19,35 @@ export default function CatalogTab({ workspaceId, role }: { workspaceId: string,
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stockAdjustProduct, setStockAdjustProduct] = useState<Product | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const canEdit = ["admin", "manager"].includes(role);
+
+  const handleEdit = (product: Product) => {
+    setSelectedProduct(product);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = async (product: Product) => {
+    if (!confirm(`¿Eliminar "${product.name}" del catálogo? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setDeletingId(product.id);
+    try {
+      const res = await fetch(
+        `/api/workspace/${workspaceId}/catalog/products?productId=${product.id}`,
+        { method: "DELETE" },
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Error al eliminar");
+      toast.success("Producto eliminado");
+      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error al eliminar");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const loadProducts = async () => {
     setLoading(true);
@@ -35,6 +63,7 @@ export default function CatalogTab({ workspaceId, role }: { workspaceId: string,
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadProducts resets loading before fetch
     loadProducts();
   }, [workspaceId]);
 
@@ -79,12 +108,33 @@ export default function CatalogTab({ workspaceId, role }: { workspaceId: string,
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(product => (
             <div key={product.id} className="border rounded-lg p-4 flex flex-col gap-2 bg-card">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-medium">{product.name}</h3>
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-medium truncate">{product.name}</h3>
                   {product.sku && <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>}
                 </div>
-                <div className="text-right">
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {canEdit && (
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(product)}
+                        aria-label={`Editar ${product.name}`}
+                        className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(product)}
+                        disabled={deletingId === product.id}
+                        aria-label={`Eliminar ${product.name}`}
+                        className="p-1.5 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                   <p className="font-semibold">{formatArs(product.price)}</p>
                   <span className="text-[10px] uppercase bg-secondary px-1.5 py-0.5 rounded text-secondary-foreground">
                     {product.type === 'service' ? 'Servicio' : 'Producto'}

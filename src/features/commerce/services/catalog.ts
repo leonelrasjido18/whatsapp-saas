@@ -48,6 +48,39 @@ export async function updateProduct(
   return data as Product;
 }
 
+/**
+ * Deletes a product. Order history is preserved (order_items.product_id is set
+ * to NULL by the FK, and product_name is stored denormalized); stock movements
+ * cascade-delete. Best-effort removes the product's images from Storage.
+ */
+export async function deleteProduct(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  productId: string
+): Promise<void> {
+  const { data: existing } = await supabase
+    .from("products")
+    .select("image_paths")
+    .eq("id", productId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from("products")
+    .delete()
+    .eq("id", productId)
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+
+  const paths = (existing?.image_paths as string[] | null) ?? [];
+  if (paths.length > 0) {
+    await supabase.storage
+      .from("whatsapp-media")
+      .remove(paths)
+      .catch(() => {}); // non-fatal: DB row is already gone
+  }
+}
+
 export async function getCategories(
   supabase: SupabaseClient,
   workspaceId: string

@@ -6,6 +6,7 @@ import {
   getProducts,
   createProduct,
   updateProduct,
+  deleteProduct,
 } from "@/features/commerce/services/catalog";
 
 function svc() {
@@ -118,5 +119,31 @@ export async function PATCH(
   } catch (error) {
     console.error("[PATCH products]:", error);
     return NextResponse.json({ error: "Error al actualizar el producto" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: workspaceId } = await params;
+
+  const auth = await requireWorkspaceMember(workspaceId, { minRole: "manager" });
+  if (!auth.ok) return auth.response;
+
+  const feat = await requireWorkspaceFeature(workspaceId, "catalog_sales");
+  if (!feat.ok) return feat.response;
+
+  const productId = req.nextUrl.searchParams.get("productId");
+  if (!productId) {
+    return NextResponse.json({ error: "Falta productId" }, { status: 400 });
+  }
+
+  try {
+    await deleteProduct(svc(), workspaceId, productId);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[DELETE products]:", error);
+    return NextResponse.json({ error: "Error al eliminar el producto" }, { status: 500 });
   }
 }

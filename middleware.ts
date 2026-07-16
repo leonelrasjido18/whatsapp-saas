@@ -78,6 +78,8 @@ export async function middleware(request: NextRequest) {
     // /r/* is the tracked Google-review redirect the customer opens from
     // WhatsApp — an anonymous visitor with no session.
     pathname.startsWith("/r/") ||
+    // /tienda/* is the public storefront (#2) — anonymous shoppers, no session.
+    pathname.startsWith("/tienda/") ||
     pathname.startsWith("/auth/");
 
   if (!user && !isPublicRoute) {

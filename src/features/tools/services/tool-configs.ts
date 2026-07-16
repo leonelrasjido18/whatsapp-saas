@@ -26,6 +26,8 @@ const STAGE_TOOL_POLICY: Record<AgentType, Set<string>> = {
   setter: new Set([
     "catalog_search",
     "send_product_image",
+    "send_quick_replies",
+    "send_voice_note",
     "get_order_status",
     "check_availability",
     "check_availability_native",
@@ -37,6 +39,8 @@ const STAGE_TOOL_POLICY: Record<AgentType, Set<string>> = {
   soporte: new Set([
     "catalog_search",
     "send_product_image",
+    "send_quick_replies",
+    "send_voice_note",
     "create_order",
     "generate_payment_link",
     "get_order_status",
@@ -50,6 +54,8 @@ const STAGE_TOOL_POLICY: Record<AgentType, Set<string>> = {
   ]),
   agendamiento: new Set([
     "catalog_search",
+    "send_quick_replies",
+    "send_voice_note",
     "get_order_status",
     "check_availability",
     "check_availability_native",
@@ -61,11 +67,12 @@ const STAGE_TOOL_POLICY: Record<AgentType, Set<string>> = {
   ]),
 };
 
-// The handoff tool is a system tool: always available in the Calificador stage,
-// even without an explicit tool_configs row.
+// System/presentation tools: always available in a stage, even without an
+// explicit tool_configs row. send_quick_replies is a pure UX helper.
 const ALWAYS_ON_BY_STAGE: Partial<Record<AgentType, string[]>> = {
-  setter: ["handoff_a_ventas", "send_product_image"],
-  soporte: ["send_product_image"],
+  setter: ["handoff_a_ventas", "send_product_image", "send_quick_replies"],
+  soporte: ["send_product_image", "send_quick_replies"],
+  agendamiento: ["send_quick_replies"],
 };
 
 /**

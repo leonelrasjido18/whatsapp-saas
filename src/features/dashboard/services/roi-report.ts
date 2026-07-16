@@ -159,3 +159,46 @@ export function formatWeeklyReportMessage(
   }
   return lines.join("\n");
 }
+
+export interface TopProduct {
+  name: string;
+  qty: number;
+  revenue: number;
+}
+
+/**
+ * Monthly summary — richer than the weekly one: adds the top products of the
+ * month so the owner sees not just how much the AI sold, but what. Kept plain
+ * text so it works as a template body parameter or a free-text message.
+ */
+export function formatMonthlyReportMessage(
+  businessName: string,
+  report: RoiReport,
+  topProducts: TopProduct[] = [],
+): string {
+  const money = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
+
+  const lines = [
+    `Resumen del mes de ${businessName}:`,
+    ``,
+    `${report.conversationsHandled} conversaciones atendidas`,
+    `${report.resolvedWithoutHuman} resueltas sin intervención humana`,
+    `${report.aiSalesCount} ventas cerradas por la IA (${money(report.aiSalesRevenue)})`,
+    `${money(report.totalSalesRevenue)} facturados en total`,
+  ];
+  if (report.recoveredCartsCount > 0) {
+    lines.push(
+      `${report.recoveredCartsCount} carritos recuperados (${money(report.recoveredCartsRevenue)})`,
+    );
+  }
+  if (report.newContacts > 0) {
+    lines.push(`${report.newContacts} clientes nuevos`);
+  }
+  if (topProducts.length > 0) {
+    lines.push(``, `Más vendidos:`);
+    for (const p of topProducts.slice(0, 3)) {
+      lines.push(`- ${p.name} (${p.qty}u · ${money(p.revenue)})`);
+    }
+  }
+  return lines.join("\n");
+}

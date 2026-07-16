@@ -8,8 +8,10 @@ import { TeamTab } from "./team-tab";
 import { TemplatesTab } from "./templates-tab";
 import { AutomationsTab } from "./automations-tab";
 import { KbTab } from "./kb-tab";
+import { AiOnboardingTab } from "./ai-onboarding-tab";
 import { ReviewsTab } from "./reviews-tab";
 import { WebchatTab } from "./webchat-tab";
+import { StorefrontTab } from "./storefront-tab";
 import { CouponsTab } from "./coupons-tab";
 import { AgentsTab } from "@/features/agents/components/agents-tab";
 import type { AgentDto } from "@/features/agents/types";
@@ -69,11 +71,13 @@ export function SettingsShell({
             <TabsTrigger value="agentes">Agentes</TabsTrigger>
             <TabsTrigger value="integraciones">Integraciones</TabsTrigger>
             <TabsTrigger value="negocio">Negocio</TabsTrigger>
+            <TabsTrigger value="autocarga">Autocarga IA</TabsTrigger>
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="knowledge-base">Knowledge Base</TabsTrigger>
             <TabsTrigger value="resenas">Reseñas</TabsTrigger>
             <TabsTrigger value="webchat">Widget Web</TabsTrigger>
+            {showCoupons && <TabsTrigger value="tienda">Tienda</TabsTrigger>}
             {showCoupons && <TabsTrigger value="cupones">Cupones</TabsTrigger>}
             <TabsTrigger value="equipo">Equipo</TabsTrigger>
             <TabsTrigger value="automatizaciones">Automatizaciones</TabsTrigger>
@@ -101,6 +105,12 @@ export function SettingsShell({
         <TabsContent value="negocio">
           <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
             <BusinessInfoForm workspaceId={workspaceId} initial={biForForm} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="autocarga">
+          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+            <AiOnboardingTab workspaceId={workspaceId} />
           </div>
         </TabsContent>
 
@@ -138,6 +148,14 @@ export function SettingsShell({
             <WebchatTab workspaceId={workspaceId} />
           </div>
         </TabsContent>
+
+        {showCoupons && (
+          <TabsContent value="tienda">
+            <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+              <StorefrontTab workspaceId={workspaceId} />
+            </div>
+          </TabsContent>
+        )}
 
         {showCoupons && (
           <TabsContent value="cupones">

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { MessageRow } from "@/features/inbox/types";
 import { StatusIcon } from "./status-icon";
 import { MessageAttachment } from "./message-attachment";
+import { MessageFeedback } from "./message-feedback";
 
 interface ChatMessageProps {
   message: MessageRow;
@@ -118,6 +119,18 @@ export function ChatMessage({ message }: ChatMessageProps) {
           </span>
           {isOutbound && <StatusIcon status={message.status} />}
         </div>
+
+        {/* #7 Train-from-inbox: rate the AI's replies (text/audio, no human
+            sender). A 👎 correction becomes a KB entry. */}
+        {isOutbound &&
+          !message.sender_user_id &&
+          (message.type === "text" || message.type === "audio") &&
+          message.body && (
+            <MessageFeedback
+              workspaceId={message.workspace_id}
+              messageId={message.id}
+            />
+          )}
       </div>
     </div>
   );

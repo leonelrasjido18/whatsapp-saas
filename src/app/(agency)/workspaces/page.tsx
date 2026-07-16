@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAllWorkspacesWithStats } from "@/features/agency/services/agency-actions";
+import { getPlatformAlerts } from "@/features/monitoring/services/monitoring-actions";
+import { AlertsPanel } from "@/features/monitoring/components/alerts-panel";
 import { WorkspacesTable } from "@/features/agency/components/workspaces-table";
 import { BrandingEditor } from "@/features/agency/components/branding-editor";
 import { Building2, Users, MessageCircle, Wifi } from "lucide-react";
@@ -25,6 +27,7 @@ export default async function AgencyWorkspacesPage() {
   if (!userRow?.is_super_admin) redirect("/inbox");
 
   const result = await getAllWorkspacesWithStats();
+  const alerts = await getPlatformAlerts();
 
   const workspaces = result.error ? [] : (result.workspaces ?? []);
 
@@ -97,6 +100,9 @@ export default async function AgencyWorkspacesPage() {
           </p>
         </div>
       )}
+
+      {/* Monitoring / uptime alerts */}
+      <AlertsPanel initialAlerts={alerts} />
 
       {/* Table */}
       <WorkspacesTable workspaces={workspaces} />

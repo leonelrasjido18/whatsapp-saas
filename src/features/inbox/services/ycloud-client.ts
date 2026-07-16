@@ -131,6 +131,138 @@ export async function sendImage(
   };
 }
 
+interface SendAudioParams {
+  apiKey: string;
+  from: string;
+  to: string;
+  /** Public/temporary URL of an Ogg/Opus (voice note) or mp3/aac audio file. */
+  link: string;
+}
+
+/**
+ * Sends an audio message via the YCloud WhatsApp API. Ogg/Opus renders as a
+ * voice note. Throws YCloudError on non-2xx responses.
+ */
+export async function sendAudio(
+  params: SendAudioParams,
+): Promise<SendTextResult> {
+  const { apiKey, from, to, link } = params;
+
+  const response = await fetch(YCLOUD_MESSAGES_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
+    },
+    body: JSON.stringify({
+      type: "audio",
+      from,
+      to,
+      audio: { link },
+    }),
+  });
+
+  let responseBody: unknown;
+  try {
+    responseBody = await response.json();
+  } catch {
+    responseBody = null;
+  }
+
+  if (!response.ok) {
+    throw new YCloudError(
+      response.status,
+      responseBody,
+      `YCloud sendAudio error ${response.status}`,
+    );
+  }
+
+  const data = responseBody as Record<string, unknown>;
+  return {
+    id: typeof data.id === "string" ? data.id : "",
+    wamid: typeof data.wamid === "string" ? data.wamid : "",
+    status: typeof data.status === "string" ? data.status : "accepted",
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// sendInteractiveButtons — WhatsApp interactive reply buttons (max 3)
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface InteractiveButton {
+  /** Stable id echoed back in the webhook when tapped. */
+  id: string;
+  /** Visible label (WhatsApp caps this at 20 chars). */
+  title: string;
+}
+
+interface SendInteractiveParams {
+  apiKey: string;
+  from: string;
+  to: string;
+  body: string;
+  buttons: InteractiveButton[];
+  /** Optional small header text above the body. */
+  header?: string;
+  /** Optional footer text below the body. */
+  footer?: string;
+}
+
+/**
+ * Sends an interactive "reply buttons" message (up to 3 buttons). Only valid
+ * inside the 24h customer-service window — WhatsApp rejects interactive
+ * messages otherwise (use a template instead). Throws YCloudError on non-2xx.
+ */
+export async function sendInteractiveButtons(
+  params: SendInteractiveParams,
+): Promise<SendTextResult> {
+  const { apiKey, from, to, body, buttons, header, footer } = params;
+
+  const trimmed = buttons.slice(0, 3).map((b) => ({
+    type: "reply" as const,
+    reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) },
+  }));
+
+  const interactive: Record<string, unknown> = {
+    type: "button",
+    body: { text: body.slice(0, 1024) },
+    action: { buttons: trimmed },
+  };
+  if (header) interactive.header = { type: "text", text: header.slice(0, 60) };
+  if (footer) interactive.footer = { text: footer.slice(0, 60) };
+
+  const response = await fetch(YCLOUD_MESSAGES_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
+    },
+    body: JSON.stringify({ type: "interactive", from, to, interactive }),
+  });
+
+  let responseBody: unknown;
+  try {
+    responseBody = await response.json();
+  } catch {
+    responseBody = null;
+  }
+
+  if (!response.ok) {
+    throw new YCloudError(
+      response.status,
+      responseBody,
+      `YCloud sendInteractive error ${response.status}`,
+    );
+  }
+
+  const data = responseBody as Record<string, unknown>;
+  return {
+    id: typeof data.id === "string" ? data.id : "",
+    wamid: typeof data.wamid === "string" ? data.wamid : "",
+    status: typeof data.status === "string" ? data.status : "accepted",
+  };
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // sendTemplate
 // ──────────────────────────────────────────────────────────────────────────────

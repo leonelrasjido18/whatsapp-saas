@@ -145,6 +145,42 @@ select cron.schedule(
   $job$
 );
 
+-- Monitoring (#6): health-check de integraciones + pipeline de IA (cada 10 min).
+select cron.schedule(
+  'health-check',
+  '*/10 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/health-check',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Alertas de negocio (#5): stock bajo + caída de tasa de respuesta (cada hora a los :20).
+select cron.schedule(
+  'business-alerts',
+  '20 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/business-alerts',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Reporte mensual (#5): resumen del mes al dueño (día 1 a las 12:00 UTC / 09:00 ART).
+select cron.schedule(
+  'monthly-report',
+  '0 12 1 * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/monthly-report',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
 -- Verify they registered:
 --   select jobname, schedule, active from cron.job
 --   where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay',

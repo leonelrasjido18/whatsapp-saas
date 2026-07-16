@@ -168,6 +168,21 @@ export function parseInbound(body: unknown): NormalizedInbound | null {
         const t = (textObj as Record<string, unknown>).body;
         text = typeof t === "string" ? t : null;
       }
+    } else if (msgType === "interactive") {
+      // Reply to an interactive message (button/list tap). We feed the chosen
+      // option's title into the pipeline as if the customer typed it, so the
+      // agent understands the selection with no extra plumbing.
+      const interactiveObj = wimObj.interactive;
+      if (typeof interactiveObj === "object" && interactiveObj !== null) {
+        const io = interactiveObj as Record<string, unknown>;
+        const reply =
+          (io.button_reply as Record<string, unknown> | undefined) ??
+          (io.list_reply as Record<string, unknown> | undefined);
+        if (reply && typeof reply.title === "string") {
+          text = reply.title;
+        }
+      }
+      if (text === null) text = "[Selección]";
     } else if (MEDIA_TYPES.includes(msgType)) {
       // YCloud nests the media object under the message type, e.g.
       // whatsappInboundMessage.image = { id, link, mimeType, caption, ... }.

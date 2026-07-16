@@ -8,8 +8,8 @@
  */
 
 import { createClient as createSbClient } from "@supabase/supabase-js";
-import { sendText, sendTemplate, sendImage } from "./ycloud-client";
-import type { TemplateParams } from "./ycloud-client";
+import { sendText, sendTemplate, sendImage, sendAudio, sendInteractiveButtons } from "./ycloud-client";
+import type { TemplateParams, InteractiveButton } from "./ycloud-client";
 import { sendMetaText, isAuthError } from "./meta-client";
 import { getMetaIntegration, flagMetaReconnectRequired } from "./meta-integration";
 import { formatWhatsAppMarkdown, formatPlainText } from "./text-formatter";
@@ -438,6 +438,190 @@ export async function dispatchImage(
 
   if (insertError) {
     console.error("[dispatch] image insert error:", insertError.message);
+    return { ok: false, error: insertError.message };
+  }
+
+  await supabase
+    .from("conversations")
+    .update({ last_message_at: new Date().toISOString() })
+    .eq("id", conversationId);
+
+  return { ok: true, wamid };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// dispatchInteractiveButtons — sends reply buttons (WhatsApp only, 24h window)
+// ──────────────────────────────────────────────────────────────────────────────
+export interface DispatchInteractiveParams {
+  workspaceId: string;
+  conversationId: string;
+  body: string;
+  buttons: InteractiveButton[];
+  header?: string;
+  footer?: string;
+  senderUserId?: string;
+}
+
+export async function dispatchInteractiveButtons(
+  params: DispatchInteractiveParams,
+): Promise<DispatchResult> {
+  const { workspaceId, conversationId, body, buttons, header, footer, senderUserId } =
+    params;
+  const supabase = svc();
+
+  const ctx = await loadSendContext(conversationId, supabase);
+
+  // Interactive messages are WhatsApp-only; other channels fall back to plain text.
+  if (ctx.channel !== "whatsapp") {
+    const lines = [body, ...buttons.map((b, i) => `${i + 1}. ${b.title}`)];
+    return dispatchText({
+      workspaceId,
+      conversationId,
+      body: lines.join("\n"),
+      senderUserId,
+    });
+  }
+  if (!ctx.optIn) {
+    return { ok: false, error: "OPT_OUT: contact has opted out of messages" };
+  }
+  if (
+    ctx.windowExpiresAt !== null &&
+    new Date() > new Date(ctx.windowExpiresAt)
+  ) {
+    return { ok: false, error: "WINDOW_EXPIRED" };
+  }
+  if (!ctx.phone) {
+    return { ok: false, error: "WHATSAPP_NO_PHONE" };
+  }
+  if (buttons.length === 0) {
+    // Nothing to make interactive — send as plain text.
+    return dispatchText({ workspaceId, conversationId, body, senderUserId });
+  }
+
+  const { apiKey, fromPhone } = await loadYCloudIntegration(workspaceId, supabase);
+  const realSend = Boolean(apiKey && apiKey !== "placeholder");
+
+  let wamid: string | undefined;
+  if (realSend) {
+    try {
+      const sent = await sendInteractiveButtons({
+        apiKey,
+        from: fromPhone,
+        to: ctx.phone,
+        body,
+        buttons,
+        header,
+        footer,
+      });
+      wamid = sent.wamid || undefined;
+    } catch (sendErr) {
+      const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+      console.error("[dispatch] YCloud sendInteractive error:", errMsg);
+      // Interactive can fail for template/format reasons — fall back to text so
+      // the customer still gets the message.
+      return dispatchText({ workspaceId, conversationId, body, senderUserId });
+    }
+  }
+
+  const { error: insertError } = await supabase.from("messages").insert({
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    direction: "out",
+    type: "text",
+    body,
+    wamid: wamid ?? null,
+    status: realSend ? "sent" : "queued",
+    sender_user_id: senderUserId ?? null,
+    meta: {
+      interactive: { buttons: buttons.map((b) => b.title) },
+      dev_mode: realSend ? undefined : true,
+    },
+  });
+
+  if (insertError) {
+    console.error("[dispatch] interactive insert error:", insertError.message);
+    return { ok: false, error: insertError.message };
+  }
+
+  await supabase
+    .from("conversations")
+    .update({ last_message_at: new Date().toISOString() })
+    .eq("id", conversationId);
+
+  return { ok: true, wamid };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// dispatchAudio — sends an audio/voice-note message (WhatsApp/YCloud only)
+// ──────────────────────────────────────────────────────────────────────────────
+export interface DispatchAudioParams {
+  workspaceId: string;
+  conversationId: string;
+  audioUrl: string;
+  /** Optional transcript stored as the message body for the inbox. */
+  transcript?: string;
+  senderUserId?: string;
+}
+
+export async function dispatchAudio(
+  params: DispatchAudioParams,
+): Promise<DispatchResult> {
+  const { workspaceId, conversationId, audioUrl, transcript, senderUserId } =
+    params;
+  const supabase = svc();
+
+  const ctx = await loadSendContext(conversationId, supabase);
+
+  if (ctx.channel !== "whatsapp") {
+    return { ok: false, error: "AUDIO_UNSUPPORTED_CHANNEL" };
+  }
+  if (!ctx.optIn) {
+    return { ok: false, error: "OPT_OUT: contact has opted out of messages" };
+  }
+  if (
+    ctx.windowExpiresAt !== null &&
+    new Date() > new Date(ctx.windowExpiresAt)
+  ) {
+    return { ok: false, error: "WINDOW_EXPIRED" };
+  }
+  if (!ctx.phone) {
+    return { ok: false, error: "WHATSAPP_NO_PHONE" };
+  }
+
+  const { apiKey, fromPhone } = await loadYCloudIntegration(workspaceId, supabase);
+  const realSend = Boolean(apiKey && apiKey !== "placeholder");
+
+  let wamid: string | undefined;
+  if (realSend) {
+    try {
+      const sent = await sendAudio({
+        apiKey,
+        from: fromPhone,
+        to: ctx.phone,
+        link: audioUrl,
+      });
+      wamid = sent.wamid || undefined;
+    } catch (sendErr) {
+      const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+      console.error("[dispatch] YCloud sendAudio error:", errMsg);
+      return { ok: false, error: errMsg };
+    }
+  }
+
+  const { error: insertError } = await supabase.from("messages").insert({
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    direction: "out",
+    type: "audio",
+    body: transcript ?? null,
+    wamid: wamid ?? null,
+    status: realSend ? "sent" : "queued",
+    sender_user_id: senderUserId ?? null,
+    meta: { media_url: audioUrl, dev_mode: realSend ? undefined : true },
+  });
+
+  if (insertError) {
+    console.error("[dispatch] audio insert error:", insertError.message);
     return { ok: false, error: insertError.message };
   }
 

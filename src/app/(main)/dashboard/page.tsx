@@ -11,6 +11,8 @@ import {
 } from "@/features/dashboard/services/roi-report";
 import { DashboardMetrics } from "@/features/dashboard/components/dashboard-metrics";
 import { RoiSection } from "@/features/dashboard/components/roi-section";
+import { getWorkspaceAlerts } from "@/features/monitoring/services/monitoring-actions";
+import { WorkspaceAlertsBanner } from "@/features/monitoring/components/workspace-alerts-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,7 @@ export default async function DashboardPage() {
 
   const windows = lastNDaysWindows(7);
 
-  const [metrics, recentConversations, roiCurrent, roiPrevious] =
+  const [metrics, recentConversations, roiCurrent, roiPrevious, alerts] =
     await Promise.all([
       getWorkspaceMetrics(membership.workspace_id),
       getRecentConversations(membership.workspace_id, 5),
@@ -51,6 +53,7 @@ export default async function DashboardPage() {
         windows.previous.from,
         windows.previous.to,
       ),
+      getWorkspaceAlerts(membership.workspace_id),
     ]);
 
   return (
@@ -63,6 +66,7 @@ export default async function DashboardPage() {
           Resumen de resultados y actividad del workspace
         </p>
       </div>
+      <WorkspaceAlertsBanner initialAlerts={alerts} />
       <RoiSection current={roiCurrent} previous={roiPrevious} />
       <DashboardMetrics
         metrics={metrics}

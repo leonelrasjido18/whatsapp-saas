@@ -325,7 +325,9 @@ export async function generateWithTools(
     ],
     tools: hasTools ? aiTools : undefined,
     stopWhen: hasTools ? stepCountIs(5) : undefined,
-    maxOutputTokens: 1024,
+    // Hard ceiling so a reply can never run away into an essay. The brevity
+    // instruction does the real work; this is the safety net (~300 words).
+    maxOutputTokens: 400,
   });
 
   return {

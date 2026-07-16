@@ -38,11 +38,25 @@ export interface BuildSystemPromptParts {
 // "balanced" is the natural default → no block, keeps the prompt lean.
 const STYLE_INSTRUCTIONS: Record<ResponseStyle, string> = {
   concise:
-    "Responde de forma breve y directa: ve al grano con el mínimo de palabras necesarias. Evita rodeos y relleno.",
+    "Responde en UNA sola frase corta siempre que puedas. Máximo 25 palabras. Sin rodeos ni relleno.",
   balanced: "",
   detailed:
     "Responde de forma completa y detallada: explica con el contexto necesario cuando ayude a la persona.",
 };
+
+// Global brevity guardrail. WhatsApp is a fast chat, not email — long, multi-
+// paragraph replies with bullet lists feel robotic and hurt conversions. This is
+// injected for EVERY style except "detailed" (the explicit opt-out for when a
+// business really wants long answers), so all agents are short by default without
+// any per-workspace configuration.
+const BREVITY_NOTE =
+  "## Brevedad (MUY IMPORTANTE)\n" +
+  "Es un chat de WhatsApp, no un correo. Responde MUY corto: 1 o 2 frases, " +
+  "máximo 40 palabras en total. Una sola idea por mensaje.\n" +
+  "PROHIBIDO: listas con viñetas o números (salvo que el cliente pida explícitamente " +
+  "una lista), párrafos largos, enumerar varias opciones/sugerencias, repetir lo ya " +
+  "dicho, y saludos o despedidas de relleno. Si necesitas más datos, hacé UNA sola " +
+  "pregunta corta. Habla natural, como una persona real que escribe rápido.";
 
 const WHATSAPP_FORMAT_NOTE =
   "## Formato\n" +
@@ -103,6 +117,12 @@ export function buildSystemPrompt(parts: BuildSystemPromptParts): string {
   const base = substituteVars(parts.promptBase, parts.vars);
   const guardrailsBlock = buildGuardrailsBlock(parts.guardrails);
 
+  // Short by default: everyone gets the brevity rule except the explicit
+  // "detailed" opt-out. Placed near the very end (before strict rules) because
+  // models obey end-of-prompt instructions most.
+  const brevityBlock =
+    parts.responseStyle === "detailed" ? "" : BREVITY_NOTE;
+
   return [
     parts.nowContext,
     summaryBlock,
@@ -112,6 +132,7 @@ export function buildSystemPrompt(parts: BuildSystemPromptParts): string {
     base,
     WHATSAPP_FORMAT_NOTE,
     MEDIA_CAPABILITY_NOTE,
+    brevityBlock,
     guardrailsBlock,
   ]
     .filter(Boolean)

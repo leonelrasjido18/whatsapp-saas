@@ -6,6 +6,7 @@ import {
   listMemberships,
 } from "@/features/workspace/services/active-workspace";
 import { WorkspaceSwitcher } from "@/features/workspace/components/workspace-switcher";
+import { MobileNav } from "@/features/workspace/components/mobile-nav";
 import { getPlatformBranding } from "@/features/agency/services/branding";
 import {
   showsCommerce,
@@ -112,10 +113,21 @@ export default async function MainLayout({
           )}
         </div>
 
-        {/* Right: agency link (super admin only) + dashboard + settings + logout */}
+        {/* Right: nav. Icon row on desktop, hamburger drawer on mobile. */}
         <div className="flex items-center gap-1 shrink-0">
           <ThemeToggle />
 
+          {/* Mobile: hamburger menu (hidden on md+) */}
+          <div className="md:hidden">
+            <MobileNav
+              showCommerce={showCommerce}
+              showBookings={showBookings}
+              isSuperAdmin={isSuperAdmin}
+            />
+          </div>
+
+          {/* Desktop: inline icon nav (hidden on mobile) */}
+          <div className="hidden md:flex items-center gap-1">
           {isSuperAdmin && (
             <Link href="/workspaces">
               <Button
@@ -210,82 +222,11 @@ export default async function MainLayout({
               <span className="sr-only sm:not-sr-only sm:ml-2">Salir</span>
             </Button>
           </form>
+          </div>
         </div>
       </header>
 
-      <div className="flex-1 pb-14 md:pb-0">{children}</div>
-
-      {/* Mobile bottom nav — hidden on md+ */}
-      <nav
-        className={cn(
-          "md:hidden fixed bottom-0 inset-x-0 z-50 h-14",
-          "glass-strong border-t border-border/50",
-          "flex items-center justify-around px-4",
-        )}
-        aria-label="Navegación móvil"
-      >
-        <Link
-          href="/inbox"
-          className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-        >
-          <MessageCircle className="h-5 w-5" aria-hidden="true" />
-          <span>Inbox</span>
-        </Link>
-
-        {showCommerce && (
-          <Link
-            href="/ventas"
-            className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-          >
-            <ShoppingBag className="h-5 w-5" aria-hidden="true" />
-            <span>Ventas</span>
-          </Link>
-        )}
-
-        {showBookings && (
-          <Link
-            href="/turnos"
-            className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-          >
-            <CalendarClock className="h-5 w-5" aria-hidden="true" />
-            <span>Turnos</span>
-          </Link>
-        )}
-
-        <Link
-          href="/campanas"
-          className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-        >
-          <Megaphone className="h-5 w-5" aria-hidden="true" />
-          <span>Campañas</span>
-        </Link>
-
-        <Link
-          href="/dashboard"
-          className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-        >
-          <LayoutDashboard className="h-5 w-5" aria-hidden="true" />
-          <span>Dashboard</span>
-        </Link>
-
-        <Link
-          href="/settings"
-          className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-        >
-          <Settings className="h-5 w-5" aria-hidden="true" />
-          <span>Settings</span>
-        </Link>
-
-        {isSuperAdmin && (
-          <Link
-            href="/workspaces"
-            className="flex flex-col items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-          >
-            <Building2 className="h-5 w-5" aria-hidden="true" />
-            <span>Agency</span>
-          </Link>
-        )}
-      </nav>
+      <div className="flex-1">{children}</div>
     </div>
   );
 }

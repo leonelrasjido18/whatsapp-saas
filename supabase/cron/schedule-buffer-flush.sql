@@ -181,6 +181,54 @@ select cron.schedule(
   $job$
 );
 
+-- Lead scoring: recalcula el puntaje de contactos activos (diario 05:00 UTC / 02:00 ART).
+select cron.schedule(
+  'lead-scoring',
+  '0 5 * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/lead-scoring',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Follow-up de leads tibios (dentro de la ventana de 24h) (cada hora a los :35).
+select cron.schedule(
+  'lead-followup',
+  '35 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/lead-followup',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- NPS post-compra: envío de encuesta + recolección de respuestas (cada hora a los :50).
+select cron.schedule(
+  'nps',
+  '50 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/nps',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Factura por WhatsApp: notifica al cliente su factura AFIP (cada 15 min).
+select cron.schedule(
+  'invoice-notify',
+  '*/15 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/invoice-notify',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
 -- Verify they registered:
 --   select jobname, schedule, active from cron.job
 --   where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay',

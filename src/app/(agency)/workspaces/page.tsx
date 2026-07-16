@@ -5,7 +5,8 @@ import { getPlatformAlerts } from "@/features/monitoring/services/monitoring-act
 import { AlertsPanel } from "@/features/monitoring/components/alerts-panel";
 import { WorkspacesTable } from "@/features/agency/components/workspaces-table";
 import { BrandingEditor } from "@/features/agency/components/branding-editor";
-import { Building2, Users, MessageCircle, Wifi } from "lucide-react";
+import { PLANS } from "@/features/billing/plans";
+import { Building2, Users, MessageCircle, Wifi, DollarSign, HeartPulse } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,33 @@ export default async function AgencyWorkspacesPage() {
   );
   const connectedCount = workspaces.filter((w) => w.ycloud_connected).length;
 
+  // MRR: sum of the monthly plan price for every paying subscription.
+  const PAYING = new Set(["active", "trialing"]);
+  const mrr = workspaces
+    .filter((w) => PAYING.has(w.subscription_status))
+    .reduce((sum, w) => sum + (PLANS[w.plan_tier]?.price_ars ?? 0), 0);
+  const mrrFmt = "$" + Math.round(mrr).toLocaleString("es-AR");
+
+  // Portfolio health: clients at risk = suspended/past_due, or connected but with
+  // zero conversations (set up but not really using it → churn risk).
+  const atRisk = workspaces.filter(
+    (w) =>
+      w.subscription_status === "suspended" ||
+      w.subscription_status === "past_due" ||
+      (w.ycloud_connected && w.conversation_count === 0),
+  ).length;
+
   const kpis = [
+    {
+      label: "MRR (ARS/mes)",
+      value: mrrFmt,
+      icon: DollarSign,
+    },
+    {
+      label: "Clientes en riesgo",
+      value: atRisk,
+      icon: HeartPulse,
+    },
     {
       label: "Workspaces",
       value: workspaces.length,
@@ -75,7 +102,7 @@ export default async function AgencyWorkspacesPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {kpis.map(({ label, value, icon: Icon }) => (
           <div
             key={label}

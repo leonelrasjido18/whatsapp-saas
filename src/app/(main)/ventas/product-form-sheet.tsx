@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import { ImagePlus, Loader2, X } from "lucide-react";
+import { ImagePlus, Loader2, X, Sparkles } from "lucide-react";
 import { Product } from "@/features/commerce/types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -25,8 +25,49 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
   const [loading, setLoading] = useState(false);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const aiInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const isEdit = !!product;
+
+  // Fills the (uncontrolled) form fields from an AI image analysis, without
+  // clobbering anything the user already typed.
+  function setFieldIfEmpty(fieldName: string, value: string) {
+    const el = formRef.current?.elements.namedItem(fieldName) as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | null;
+    if (el && !el.value) el.value = value;
+  }
+
+  async function analyzeImage(file: File) {
+    setAnalyzing(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(
+        `/api/workspace/${workspaceId}/catalog/products/analyze-image`,
+        { method: "POST", body: fd },
+      );
+      const json = (await res.json()) as {
+        data?: { name: string; description: string; price: number | null };
+        error?: string;
+      };
+      if (!res.ok || !json.data) {
+        throw new Error(json.error ?? "No se pudo analizar");
+      }
+      setFieldIfEmpty("name", json.data.name);
+      setFieldIfEmpty("description", json.data.description);
+      if (json.data.price != null) setFieldIfEmpty("price", String(json.data.price));
+      toast.success("Datos completados con IA. Revisalos antes de guardar.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al analizar");
+    } finally {
+      setAnalyzing(false);
+      if (aiInputRef.current) aiInputRef.current.value = "";
+    }
+  }
 
   // Load existing product images (fetch signed URLs for their stored paths).
   const loadExistingImages = useCallback(async () => {
@@ -102,6 +143,7 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
       name: formData.get("name"),
       type,
       sku: formData.get("sku") || undefined,
+      description: (formData.get("description") as string) || undefined,
       price: parseFloat(formData.get("price") as string),
       stock_qty: type === "product" ? parseInt(formData.get("stock_qty") as string) : null,
       image_paths: images.map((img) => img.path),
@@ -138,7 +180,7 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
           <SheetTitle>{isEdit ? "Editar" : "Nuevo"} Producto o Servicio</SheetTitle>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 mt-6">
           {/* Fotos del producto */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Fotos</label>
@@ -190,6 +232,31 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
               className="hidden"
               onChange={(e) => handleFiles(e.target.files)}
             />
+
+            {/* Foto → producto: analiza una foto y completa los campos */}
+            <button
+              type="button"
+              onClick={() => aiInputRef.current?.click()}
+              disabled={analyzing}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+            >
+              {analyzing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              Completar con IA desde una foto
+            </button>
+            <input
+              ref={aiInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) analyzeImage(f);
+              }}
+            />
           </div>
 
           <div className="space-y-2">
@@ -203,6 +270,16 @@ export default function ProductFormSheet({ isOpen, onClose, workspaceId, product
           <div className="space-y-2">
             <label className="text-sm font-medium">Nombre *</label>
             <Input name="name" defaultValue={product?.name || ""} required />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Descripción (opcional)</label>
+            <textarea
+              name="description"
+              defaultValue={product?.description || ""}
+              rows={2}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+            />
           </div>
 
           <div className="space-y-2">

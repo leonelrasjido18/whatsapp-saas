@@ -13,6 +13,7 @@ interface Service {
   name: string;
   duration_min: number;
   price: number;
+  deposit_amount?: number;
 }
 
 export default function ServicesTab({
@@ -27,6 +28,7 @@ export default function ServicesTab({
   const [name, setName] = useState("");
   const [duration, setDuration] = useState("30");
   const [price, setPrice] = useState("0");
+  const [deposit, setDeposit] = useState("0");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -58,6 +60,7 @@ export default function ServicesTab({
           name: name.trim(),
           duration_min: Number(duration),
           price: Number(price),
+          deposit_amount: Number(deposit) || 0,
         }),
       });
       if (!res.ok) throw new Error();
@@ -65,6 +68,7 @@ export default function ServicesTab({
       setName("");
       setDuration("30");
       setPrice("0");
+      setDeposit("0");
       load();
     } catch {
       toast.error("No se pudo agregar");
@@ -92,7 +96,7 @@ export default function ServicesTab({
       {canManage && (
         <div className="rounded-lg border border-border/60 p-4 space-y-3">
           <p className="text-sm font-medium">Nuevo servicio</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="s-name">Nombre</Label>
               <Input
@@ -122,6 +126,16 @@ export default function ServicesTab({
                 onChange={(e) => setPrice(e.target.value)}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="s-deposit">Seña (opcional)</Label>
+              <Input
+                id="s-deposit"
+                type="number"
+                min={0}
+                value={deposit}
+                onChange={(e) => setDeposit(e.target.value)}
+              />
+            </div>
           </div>
           <Button size="sm" onClick={add} disabled={saving}>
             <Plus className="h-4 w-4 mr-1.5" />
@@ -148,6 +162,11 @@ export default function ServicesTab({
                 <p className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                   <Clock className="h-3 w-3" /> {s.duration_min} min ·{" "}
                   {formatArs(s.price)}
+                  {s.deposit_amount != null && s.deposit_amount > 0 && (
+                    <span className="text-amber-600 dark:text-amber-400">
+                      · seña {formatArs(s.deposit_amount)}
+                    </span>
+                  )}
                 </p>
               </div>
               {canManage && (

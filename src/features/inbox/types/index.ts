@@ -49,6 +49,7 @@ export interface ContactRow {
   customer_tier?: "new" | "regular" | "vip" | "inactive";
   total_spent?: number;
   last_purchase_at?: string;
+  lead_score?: number;
   created_at: string;
   updated_at: string;
 }

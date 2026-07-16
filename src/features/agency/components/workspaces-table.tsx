@@ -22,7 +22,9 @@ import { switchWorkspace } from "@/features/workspace/services/actions";
 import {
   deleteWorkspaceForClient,
   updateWorkspaceBusinessType,
+  applyWorkspaceTemplate,
 } from "../services/agency-actions";
+import { INDUSTRY_TEMPLATES } from "../services/industry-templates";
 import { BUSINESS_TYPES, type BusinessType } from "@/features/workspace/lib/business-type";
 import { cn } from "@/lib/utils";
 import type { WorkspaceWithStats } from "../types";
@@ -82,6 +84,32 @@ export function WorkspacesTable({ workspaces }: Props) {
         return;
       }
       toast.success("Tipo de negocio actualizado");
+      router.refresh();
+    });
+  }
+
+  function handleApplyTemplate(
+    workspaceId: string,
+    name: string,
+    templateKey: string,
+  ) {
+    if (!templateKey) return;
+    if (
+      !confirm(
+        `Aplicar esta plantilla a "${name}"? Va a cargar prompt, catálogo demo, FAQs y activar las tools del rubro.`,
+      )
+    ) {
+      return;
+    }
+    startRefresh(async () => {
+      const result = await applyWorkspaceTemplate(workspaceId, templateKey);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        `Plantilla aplicada (${result.productsCreated ?? 0} productos demo).`,
+      );
       router.refresh();
     });
   }
@@ -195,22 +223,45 @@ export function WorkspacesTable({ workspaces }: Props) {
               <p className="font-mono text-xs text-muted-foreground mt-0.5">
                 {workspace.slug}
               </p>
-              <select
-                value={workspace.business_type}
-                onChange={(e) =>
-                  handleTypeChange(workspace.id, e.target.value as BusinessType)
-                }
-                disabled={refreshing}
-                aria-label={`Tipo de negocio de ${workspace.name}`}
-                className="mt-1.5 h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {BUSINESS_TYPES.map((bt) => (
-                  <option key={bt.value} value={bt.value}>
-                    {bt.label}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <select
+                  value={workspace.business_type}
+                  onChange={(e) =>
+                    handleTypeChange(workspace.id, e.target.value as BusinessType)
+                  }
+                  disabled={refreshing}
+                  aria-label={`Tipo de negocio de ${workspace.name}`}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {BUSINESS_TYPES.map((bt) => (
+                    <option key={bt.value} value={bt.value}>
+                      {bt.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value=""
+                  onChange={(e) =>
+                    handleApplyTemplate(
+                      workspace.id,
+                      workspace.name,
+                      e.target.value,
+                    )
+                  }
+                  disabled={refreshing}
+                  aria-label={`Aplicar plantilla de rubro a ${workspace.name}`}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <option value="">+ Plantilla de rubro…</option>
+                  {INDUSTRY_TEMPLATES.map((t) => (
+                    <option key={t.key} value={t.key}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Miembros */}

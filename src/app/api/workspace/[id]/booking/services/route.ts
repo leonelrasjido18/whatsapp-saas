@@ -22,6 +22,7 @@ const CreateSchema = z.object({
   name: z.string().min(1).max(200),
   duration_min: z.number().int().min(5).max(1440),
   price: z.number().min(0),
+  deposit_amount: z.number().min(0).optional(),
 });
 
 export async function POST(

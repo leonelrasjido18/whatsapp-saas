@@ -17,6 +17,7 @@ export interface BookingService {
   name: string;
   duration_min: number;
   price: number;
+  deposit_amount: number;
   active: boolean;
 }
 
@@ -129,7 +130,7 @@ export async function listServices(
 ): Promise<BookingService[]> {
   const { data } = await svc()
     .from("booking_services")
-    .select("id, name, duration_min, price, active")
+    .select("id, name, duration_min, price, deposit_amount, active")
     .eq("workspace_id", workspaceId)
     .eq("active", true)
     .order("name");
@@ -150,6 +151,9 @@ export interface CreateAppointmentInput {
 export interface CreateAppointmentResult {
   ok: boolean;
   appointment?: Appointment;
+  /** Seña required to confirm (0 = none), plus the service name for the link. */
+  depositAmount?: number;
+  serviceName?: string | null;
   error?: string;
 }
 
@@ -167,14 +171,18 @@ export async function createAppointment(
   }
 
   let durationMin = 30;
+  let depositAmount = 0;
+  let serviceName: string | null = null;
   if (input.serviceId) {
     const { data: service } = await supabase
       .from("booking_services")
-      .select("duration_min")
+      .select("duration_min, deposit_amount, name")
       .eq("id", input.serviceId)
       .eq("workspace_id", input.workspaceId)
       .maybeSingle();
     if (service?.duration_min) durationMin = service.duration_min as number;
+    depositAmount = Number(service?.deposit_amount ?? 0);
+    serviceName = (service?.name as string | null) ?? null;
   }
   const end = new Date(start.getTime() + durationMin * 60 * 1000);
 
@@ -211,7 +219,12 @@ export async function createAppointment(
   if (error || !data) {
     return { ok: false, error: error?.message ?? "No se pudo agendar" };
   }
-  return { ok: true, appointment: data as Appointment };
+  return {
+    ok: true,
+    appointment: data as Appointment,
+    depositAmount,
+    serviceName,
+  };
 }
 
 export async function listUpcomingForContact(
@@ -246,12 +259,17 @@ export async function cancelAppointment(
 
 export async function createService(
   workspaceId: string,
-  input: { name: string; duration_min: number; price: number },
+  input: {
+    name: string;
+    duration_min: number;
+    price: number;
+    deposit_amount?: number;
+  },
 ): Promise<BookingService> {
   const { data, error } = await svc()
     .from("booking_services")
     .insert({ workspace_id: workspaceId, ...input })
-    .select("id, name, duration_min, price, active")
+    .select("id, name, duration_min, price, deposit_amount, active")
     .single();
   if (error) throw error;
   return data as BookingService;

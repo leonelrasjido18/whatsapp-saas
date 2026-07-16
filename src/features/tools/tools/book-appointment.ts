@@ -33,12 +33,80 @@ async function run(args: Args, ctx: ToolContext): Promise<ToolResult> {
     return { ok: false, output: null, error: result.error ?? "No se pudo agendar" };
   }
 
+  const deposit = result.depositAmount ?? 0;
+
+  // No deposit required → done.
+  if (deposit <= 0) {
+    return {
+      ok: true,
+      output: {
+        appointment_id: result.appointment.id,
+        starts_at: result.appointment.starts_at,
+        message: "Turno agendado con éxito.",
+      },
+    };
+  }
+
+  // Deposit required: try to generate a MercadoPago link so the customer can pay
+  // the seña to confirm. If MP isn't configured, ask for a transfer instead.
+  const money = "$" + Math.round(deposit).toLocaleString("es-AR");
+  try {
+    const { createClient: createSbClient } = await import("@supabase/supabase-js");
+    const { getValidMpAccessToken } = await import(
+      "@/features/commerce/services/mercadopago-oauth"
+    );
+    const { createCheckoutPreference } = await import(
+      "@/features/commerce/services/mercadopago"
+    );
+    const supabase = createSbClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    const token = await getValidMpAccessToken(supabase, ctx.workspaceId);
+    if (token) {
+      // Synthetic single-item "order" just to build the checkout preference for
+      // the deposit. The money lands in the merchant's MercadoPago.
+      const syntheticOrder = {
+        id: result.appointment.id,
+        items: [
+          {
+            id: "sena",
+            product_id: null,
+            product_name: `Seña - ${result.serviceName ?? "turno"}`,
+            unit_price: deposit,
+            qty: 1,
+          },
+        ],
+      } as unknown as Parameters<typeof createCheckoutPreference>[1];
+
+      const pref = await createCheckoutPreference(
+        token,
+        syntheticOrder,
+        ctx.workspaceId,
+      );
+      return {
+        ok: true,
+        output: {
+          appointment_id: result.appointment.id,
+          starts_at: result.appointment.starts_at,
+          deposit_amount: deposit,
+          payment_link: pref.init_point,
+          message: `Turno reservado. Para confirmarlo, pedile al cliente que abone la seña de ${money} con este link.`,
+        },
+      };
+    }
+  } catch (e) {
+    console.error("[book_appointment] deposit link failed:", e);
+  }
+
+  // MP not available or link failed → ask for a transfer.
   return {
     ok: true,
     output: {
       appointment_id: result.appointment.id,
       starts_at: result.appointment.starts_at,
-      message: "Turno agendado con éxito.",
+      deposit_amount: deposit,
+      message: `Turno reservado. Para confirmarlo se requiere una seña de ${money}. Pedile al cliente que la transfiera o la abone.`,
     },
   };
 }

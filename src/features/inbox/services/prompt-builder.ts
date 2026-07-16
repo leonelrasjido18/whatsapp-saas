@@ -33,6 +33,10 @@ export interface BuildSystemPromptParts {
   responseStyle?: ResponseStyle | null;
   guardrails?: PromptGuardrails | null;
   vars?: SystemPromptVars;
+  /** Per-contact long-term memory block (past purchases, tier, etc.). */
+  customerMemory?: string | null;
+  /** Business opening hours string, e.g. "Lun a Vie de 9 a 18". */
+  businessHours?: string | null;
 }
 
 // "balanced" is the natural default → no block, keeps the prompt lean.
@@ -123,10 +127,26 @@ export function buildSystemPrompt(parts: BuildSystemPromptParts): string {
   const brevityBlock =
     parts.responseStyle === "detailed" ? "" : BREVITY_NOTE;
 
+  const memoryBlock =
+    parts.customerMemory && parts.customerMemory.trim()
+      ? parts.customerMemory.trim()
+      : "";
+
+  const hoursBlock =
+    parts.businessHours && parts.businessHours.trim()
+      ? "## Horario de atención\n" +
+        `El horario de atención es: ${parts.businessHours.trim()}. ` +
+        "Podés responder siempre, pero si el cliente escribe fuera de ese horario " +
+        "y necesita algo que requiere una persona (un reclamo, algo que no podés " +
+        "resolver), avisale con amabilidad que el equipo lo contactará en el horario de atención."
+      : "";
+
   return [
     parts.nowContext,
     summaryBlock,
     parts.bizContext,
+    hoursBlock,
+    memoryBlock,
     parts.kbContext ?? "",
     styleBlock,
     base,

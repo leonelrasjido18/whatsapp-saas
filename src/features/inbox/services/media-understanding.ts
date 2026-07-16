@@ -134,6 +134,82 @@ export async function transcribeAudio(opts: {
  * Describes an inbound image so the agent understands what the client sent
  * (documents, screenshots, photos of teeth, etc.). Returns null on failure.
  */
+export interface ProductSuggestion {
+  name: string;
+  description: string;
+  price: number | null;
+}
+
+/**
+ * Foto → producto: looks at a product photo and proposes a catalog title,
+ * description and (best-effort) price. Used by the product form to speed up
+ * catalog loading. Returns null on failure so the caller can fall back to manual.
+ */
+export async function suggestProductFromImage(opts: {
+  bytes: Uint8Array;
+  mimeType?: string;
+  workspaceId: string;
+}): Promise<ProductSuggestion | null> {
+  const apiKey = await getOpenRouterApiKey(opts.workspaceId);
+  if (!apiKey) return null;
+
+  try {
+    const { text } = await generateText({
+      model: openrouter(apiKey).chat(UNDERSTANDING_MODEL),
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Sos un asistente que ayuda a cargar productos a un catálogo a partir de una foto. " +
+                "Devolvé EXCLUSIVAMENTE un JSON válido (sin markdown) con la forma: " +
+                '{"name": string, "description": string, "price": number|null}. ' +
+                "name: un título corto y comercial. description: 1-2 frases atractivas. " +
+                "price: un precio estimado en pesos argentinos si podés inferirlo, si no null. " +
+                "No inventes marcas ni datos que no se vean.",
+            },
+            { type: "image", image: opts.bytes, mediaType: opts.mimeType },
+          ],
+        },
+      ],
+      maxOutputTokens: 400,
+    });
+
+    let t = text.trim();
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) t = fence[1].trim();
+    const first = t.indexOf("{");
+    const last = t.lastIndexOf("}");
+    if (first !== -1 && last !== -1 && last > first) t = t.slice(first, last + 1);
+
+    const parsed = JSON.parse(t) as Record<string, unknown>;
+    const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
+    if (!name) return null;
+    const priceNum =
+      typeof parsed.price === "number"
+        ? parsed.price
+        : typeof parsed.price === "string"
+          ? Number(parsed.price.replace(/[^\d.]/g, ""))
+          : NaN;
+    return {
+      name: name.slice(0, 200),
+      description:
+        typeof parsed.description === "string"
+          ? parsed.description.trim().slice(0, 1000)
+          : "",
+      price: Number.isFinite(priceNum) && priceNum >= 0 ? priceNum : null,
+    };
+  } catch (err) {
+    console.error(
+      "[media-understanding] suggestProductFromImage error:",
+      err instanceof Error ? err.message : "unknown",
+    );
+    return null;
+  }
+}
+
 export async function describeImage(opts: {
   storagePath: string;
   mimeType?: string;

@@ -8,6 +8,10 @@ import {
   resolveUseCase,
   defaultToolKeysForBusinessType,
 } from "@/features/workspace/lib/business-type";
+import {
+  getIndustryTemplate,
+  applyIndustryTemplate as applyTemplate,
+} from "./industry-templates";
 import type {
   ClientCredentials,
   CreateWorkspaceResult,
@@ -332,6 +336,29 @@ export async function deleteWorkspaceForClient(
   }
 
   return { ok: true };
+}
+
+/**
+ * Applies an industry template (prompt + demo catalog + FAQs + tools) to a
+ * client workspace. Super-admin only.
+ */
+export async function applyWorkspaceTemplate(
+  workspaceId: string,
+  templateKey: string,
+): Promise<{ ok?: boolean; error?: string; productsCreated?: number }> {
+  const userId = await assertSuperAdmin();
+  if (!userId) return { error: "No autorizado" };
+
+  const template = getIndustryTemplate(templateKey);
+  if (!template) return { error: "Plantilla desconocida" };
+
+  try {
+    const result = await applyTemplate(svc(), workspaceId, template, userId);
+    return { ok: true, productsCreated: result.productsCreated };
+  } catch (err) {
+    console.error("[agency] applyWorkspaceTemplate error:", err);
+    return { error: "Error al aplicar la plantilla" };
+  }
 }
 
 export async function getAllWorkspacesWithStats(): Promise<GetWorkspacesResult> {

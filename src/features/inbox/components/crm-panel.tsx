@@ -186,6 +186,24 @@ export function CrmPanel({ contact, conversationId }: CrmPanelProps) {
                       {contact.customer_tier}
                     </span>
                   )}
+                  {typeof contact.lead_score === "number" && contact.lead_score > 0 && (
+                    <span
+                      className={`text-[9px] uppercase px-1.5 py-0.5 rounded-full font-bold ${
+                        contact.lead_score >= 70
+                          ? "bg-red-100 text-red-800"
+                          : contact.lead_score >= 40
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-gray-100 text-gray-700"
+                      }`}
+                      title={`Lead score: ${contact.lead_score}/100`}
+                    >
+                      {contact.lead_score >= 70
+                        ? "🔥 Caliente"
+                        : contact.lead_score >= 40
+                          ? "Tibio"
+                          : "Frío"}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

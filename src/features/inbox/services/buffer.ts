@@ -10,6 +10,7 @@ import type { ConversationChannel } from "../types/index";
 import type { ToolContext } from "@/features/tools/core/tool";
 import { resolveSystemPrompt } from "./prompt-resolver";
 import { buildSystemPrompt } from "./prompt-builder";
+import { buildCustomerMemory } from "./customer-memory";
 import {
   getAgentForConversation,
   ensureConversationStage,
@@ -397,8 +398,28 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     const structured = businessInfo?.structured as {
       timezone?: string;
       name?: string;
+      hours?: string;
+      business_hours?: string;
     } | null;
     const tz = structured?.timezone ?? "America/Mexico_City";
+    const businessHours =
+      structured?.business_hours ?? structured?.hours ?? null;
+
+    // Long-term per-customer memory (past purchases, tier). Best-effort: a
+    // failure here must never block the reply.
+    let customerMemory: string | null = null;
+    try {
+      customerMemory = await buildCustomerMemory(
+        supabase,
+        batch.workspace_id,
+        conversation.contact_id as string,
+      );
+    } catch (memErr) {
+      console.warn(
+        "[buffer] customer memory failed:",
+        memErr instanceof Error ? memErr.message : memErr,
+      );
+    }
     // WS1: surface the rolling conversation summary so the model keeps long-term
     // context beyond the recent-message window.
     const summary =
@@ -415,6 +436,8 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       kbContext,
       responseStyle: activeAgent?.config.responseStyle ?? null,
       guardrails: resolvedPrompt?.guardrails ?? null,
+      customerMemory,
+      businessHours,
       vars: {
         agentName: activeAgent?.name ?? null,
         businessName: structured?.name ?? null,

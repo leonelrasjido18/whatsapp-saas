@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { ModelPicker } from "@/features/agents/components/model-picker";
 import { MetaSection } from "./meta-section";
@@ -127,6 +128,9 @@ function YCloudSection({
   const [messagesInMemory, setMessagesInMemory] = useState<number>(
     (initial?.config?.message_history_window as number | undefined) ?? 10,
   );
+  const [leadFollowup, setLeadFollowup] = useState<boolean>(
+    (initial?.config?.lead_followup_enabled as boolean | undefined) ?? false,
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -189,6 +193,7 @@ function YCloudSection({
             phone_number: phone,
             buffer_silence_seconds: bufferSeconds,
             message_history_window: messagesInMemory,
+            lead_followup_enabled: leadFollowup,
           },
         }),
       });
@@ -317,6 +322,24 @@ function YCloudSection({
           <p className="text-xs text-muted-foreground">
             Cuántos mensajes recientes recuerda la IA al responder (entre 5 y
             50). Por defecto 10.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border/60 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="ycloud-followup" className="cursor-pointer">
+              Follow-up automático de leads
+            </Label>
+            <Switch
+              id="ycloud-followup"
+              checked={leadFollowup}
+              onCheckedChange={setLeadFollowup}
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Si un cliente consultó y quedó sin responder (dentro de las 24h), la
+            IA le manda un único recordatorio amable para reengancharlo. Apagado
+            por defecto.
           </p>
         </div>
 

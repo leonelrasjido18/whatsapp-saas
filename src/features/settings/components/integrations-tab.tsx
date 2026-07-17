@@ -131,6 +131,18 @@ function YCloudSection({
   const [leadFollowup, setLeadFollowup] = useState<boolean>(
     (initial?.config?.lead_followup_enabled as boolean | undefined) ?? false,
   );
+  const [reportPhone, setReportPhone] = useState(
+    (initial?.config?.weekly_report_phone as string | undefined) ?? "",
+  );
+  const [weeklyTemplate, setWeeklyTemplate] = useState(
+    (initial?.config?.weekly_report_template as string | undefined) ?? "",
+  );
+  const [monthlyTemplate, setMonthlyTemplate] = useState(
+    (initial?.config?.monthly_report_template as string | undefined) ?? "",
+  );
+  const [npsTemplate, setNpsTemplate] = useState(
+    (initial?.config?.nps_template as string | undefined) ?? "",
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -194,6 +206,10 @@ function YCloudSection({
             buffer_silence_seconds: bufferSeconds,
             message_history_window: messagesInMemory,
             lead_followup_enabled: leadFollowup,
+            weekly_report_phone: reportPhone,
+            weekly_report_template: weeklyTemplate,
+            monthly_report_template: monthlyTemplate,
+            nps_template: npsTemplate,
           },
         }),
       });
@@ -341,6 +357,63 @@ function YCloudSection({
             IA le manda un único recordatorio amable para reengancharlo. Apagado
             por defecto.
           </p>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-border/60 p-3">
+          <div>
+            <Label>Reportes y encuestas por WhatsApp</Label>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Requiere templates de WhatsApp ya aprobados (pestaña Templates).
+              Sin esto, el reporte semanal/mensual y la encuesta NPS no se
+              envían — quedan solo disponibles para descarga manual.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ycloud-report-phone" className="text-xs">
+              Teléfono del dueño (recibe los reportes)
+            </Label>
+            <Input
+              id="ycloud-report-phone"
+              type="tel"
+              placeholder="+521234567890"
+              value={reportPhone}
+              onChange={(e) => setReportPhone(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ycloud-weekly-template" className="text-xs">
+              Template — reporte semanal
+            </Label>
+            <Input
+              id="ycloud-weekly-template"
+              placeholder="nombre_del_template_aprobado"
+              value={weeklyTemplate}
+              onChange={(e) => setWeeklyTemplate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ycloud-monthly-template" className="text-xs">
+              Template — reporte mensual{" "}
+              <span className="text-muted-foreground font-normal">(opcional, si no usa el semanal)</span>
+            </Label>
+            <Input
+              id="ycloud-monthly-template"
+              placeholder="nombre_del_template_aprobado"
+              value={monthlyTemplate}
+              onChange={(e) => setMonthlyTemplate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ycloud-nps-template" className="text-xs">
+              Template — encuesta NPS
+            </Label>
+            <Input
+              id="ycloud-nps-template"
+              placeholder="nombre_del_template_aprobado"
+              value={npsTemplate}
+              onChange={(e) => setNpsTemplate(e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2 pt-2">

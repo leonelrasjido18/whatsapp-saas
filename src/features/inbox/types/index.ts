@@ -2,7 +2,8 @@ export type ConversationChannel =
   | "whatsapp"
   | "facebook"
   | "instagram"
-  | "webchat";
+  | "webchat"
+  | "phone";
 
 export type ConversationState =
   | "ai_active"

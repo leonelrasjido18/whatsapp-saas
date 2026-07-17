@@ -16,6 +16,8 @@ import { WorkspaceAlertsBanner } from "@/features/monitoring/components/workspac
 import { InsightsSection } from "@/features/dashboard/components/insights-section";
 import { AnalyticsSection } from "@/features/dashboard/components/analytics-section";
 import { PushEnableButton } from "@/features/monitoring/components/push-enable-button";
+import { Button } from "@/components/ui/button";
+import { FileDown } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +87,19 @@ export default async function DashboardPage() {
             Resumen de resultados y actividad del workspace
           </p>
         </div>
-        <PushEnableButton />
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/workspace/${membership.workspace_id}/reports/monthly.pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button size="sm" variant="outline">
+              <FileDown className="h-3.5 w-3.5 mr-1.5" aria-hidden />
+              Descargar PDF
+            </Button>
+          </a>
+          <PushEnableButton />
+        </div>
       </div>
       <WorkspaceAlertsBanner initialAlerts={alerts} />
       {npsAvg !== null && (

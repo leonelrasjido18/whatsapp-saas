@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Globe } from "lucide-react";
+import { MessageSquare, Globe, Phone } from "lucide-react";
 import { Facebook, Instagram } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { ConversationChannel } from "@/features/inbox/types";
@@ -32,6 +32,11 @@ const CHANNEL_CONFIG = {
     label: "Web",
     className: "text-[#2563eb] bg-[#2563eb]/10 border-[#2563eb]/20",
     Icon: Globe,
+  },
+  phone: {
+    label: "Teléfono",
+    className: "text-[#8b5cf6] bg-[#8b5cf6]/10 border-[#8b5cf6]/20",
+    Icon: Phone,
   },
 };
 

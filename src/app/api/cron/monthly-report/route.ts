@@ -7,6 +7,8 @@ import {
   lastNDaysWindows,
   type TopProduct,
 } from "@/features/dashboard/services/roi-report";
+import { buildMonthlyReportPdf } from "@/features/dashboard/services/monthly-pdf";
+import { getPlatformBranding } from "@/features/agency/services/branding";
 
 // #5 Monthly report to the business owner — same delivery mechanism as the
 // weekly one (approved template, outside the 24h window), but a 30-day window
@@ -99,6 +101,7 @@ export async function GET(req: Request) {
     }
 
     const { current } = lastNDaysWindows(30);
+    const branding = await getPlatformBranding();
     let sent = 0;
     let skipped = 0;
 
@@ -123,11 +126,52 @@ export async function GET(req: Request) {
         // Non-commerce workspace or RPC missing — omit the section.
       }
 
-      const summary = formatMonthlyReportMessage(
+      let summary = formatMonthlyReportMessage(
         nameById.get(t.workspaceId) ?? "tu negocio",
         report,
         topProducts,
       );
+
+      // Generate a branded PDF, upload it, and append the link (best-effort —
+      // never blocks sending the text summary if PDF generation/upload fails).
+      try {
+        const { data: npsRows } = await supabase
+          .from("nps_responses")
+          .select("score")
+          .eq("workspace_id", t.workspaceId)
+          .not("score", "is", null)
+          .gte("requested_at", current.from);
+        const scores = (npsRows ?? [])
+          .map((r) => Number(r.score))
+          .filter((n) => Number.isFinite(n));
+        const npsAvg =
+          scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+
+        const pdf = buildMonthlyReportPdf({
+          businessName: nameById.get(t.workspaceId) ?? "tu negocio",
+          branding,
+          report,
+          topProducts,
+          npsAvg,
+        });
+
+        const monthKey = new Date().toISOString().slice(0, 7);
+        const path = `${t.workspaceId}/reports/monthly-${monthKey}.pdf`;
+        await supabase.storage
+          .from("whatsapp-media")
+          .upload(path, pdf, { contentType: "application/pdf", upsert: true });
+        const { data: signed } = await supabase.storage
+          .from("whatsapp-media")
+          .createSignedUrl(path, 30 * 24 * 3600);
+        if (signed?.signedUrl) {
+          summary += `\n\nPDF: ${signed.signedUrl}`;
+        }
+      } catch (pdfErr) {
+        console.error(
+          `[Cron monthly-report] PDF generation failed for ${t.workspaceId}:`,
+          pdfErr,
+        );
+      }
 
       const result = await sendTemplate({
         apiKey: t.apiKey,

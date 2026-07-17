@@ -10,11 +10,13 @@ import { AutomationsTab } from "./automations-tab";
 import { KbTab } from "./kb-tab";
 import { AiOnboardingTab } from "./ai-onboarding-tab";
 import { LocationsTab } from "./locations-tab";
+import { VoiceTab } from "./voice-tab";
 import { ReviewsTab } from "./reviews-tab";
 import { WebchatTab } from "./webchat-tab";
 import { StorefrontTab } from "./storefront-tab";
 import { CouponsTab } from "./coupons-tab";
 import { AgentsTab } from "@/features/agents/components/agents-tab";
+import { PromptImprovementTab } from "@/features/agents/components/prompt-improvement-tab";
 import type { AgentDto } from "@/features/agents/types";
 import {
   showsCommerce,
@@ -70,9 +72,11 @@ export function SettingsShell({
         <div className="mb-6 -mx-1 overflow-x-auto px-1 pb-1">
           <TabsList className="w-max">
             <TabsTrigger value="agentes">Agentes</TabsTrigger>
+            <TabsTrigger value="mejora-ia">Mejora IA</TabsTrigger>
             <TabsTrigger value="integraciones">Integraciones</TabsTrigger>
             <TabsTrigger value="negocio">Negocio</TabsTrigger>
             <TabsTrigger value="sucursales">Sucursales</TabsTrigger>
+            <TabsTrigger value="voz">IA Telefónica</TabsTrigger>
             <TabsTrigger value="autocarga">Autocarga IA</TabsTrigger>
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="templates">Templates</TabsTrigger>
@@ -95,6 +99,12 @@ export function SettingsShell({
           </div>
         </TabsContent>
 
+        <TabsContent value="mejora-ia">
+          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+            <PromptImprovementTab workspaceId={workspaceId} />
+          </div>
+        </TabsContent>
+
         <TabsContent value="integraciones">
           <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
             <IntegrationsTab
@@ -113,6 +123,12 @@ export function SettingsShell({
         <TabsContent value="sucursales">
           <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
             <LocationsTab workspaceId={workspaceId} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="voz">
+          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+            <VoiceTab workspaceId={workspaceId} />
           </div>
         </TabsContent>
 

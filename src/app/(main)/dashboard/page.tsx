@@ -14,6 +14,8 @@ import { RoiSection } from "@/features/dashboard/components/roi-section";
 import { getWorkspaceAlerts } from "@/features/monitoring/services/monitoring-actions";
 import { WorkspaceAlertsBanner } from "@/features/monitoring/components/workspace-alerts-banner";
 import { InsightsSection } from "@/features/dashboard/components/insights-section";
+import { AnalyticsSection } from "@/features/dashboard/components/analytics-section";
+import { PushEnableButton } from "@/features/monitoring/components/push-enable-button";
 
 export const dynamic = "force-dynamic";
 
@@ -74,13 +76,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
-      <div>
-        <h1 className="font-display text-xl font-semibold text-foreground">
-          Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Resumen de resultados y actividad del workspace
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-xl font-semibold text-foreground">
+            Dashboard
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Resumen de resultados y actividad del workspace
+          </p>
+        </div>
+        <PushEnableButton />
       </div>
       <WorkspaceAlertsBanner initialAlerts={alerts} />
       {npsAvg !== null && (
@@ -100,6 +105,7 @@ export default async function DashboardPage() {
         </div>
       )}
       <RoiSection current={roiCurrent} previous={roiPrevious} />
+      <AnalyticsSection workspaceId={membership.workspace_id} />
       <InsightsSection workspaceId={membership.workspace_id} />
       <DashboardMetrics
         metrics={metrics}

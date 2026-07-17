@@ -11,6 +11,9 @@ import type { ToolContext } from "@/features/tools/core/tool";
 import { resolveSystemPrompt } from "./prompt-resolver";
 import { buildSystemPrompt } from "./prompt-builder";
 import { buildCustomerMemory } from "./customer-memory";
+import { buildLocationsContext } from "@/features/workspace/services/locations";
+import { detectNegativeSentiment } from "./sentiment";
+import { raiseAlert } from "@/features/monitoring/services/alerts";
 import {
   getAgentForConversation,
   ensureConversationStage,
@@ -307,6 +310,39 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       throw new Error(`Conversation not found: ${convError?.message}`);
     }
 
+    // ── 4b. Anger escalation: if the customer is clearly upset, alert the owner
+    // and hand off to a human. The AI still gives this one (calming) reply, but
+    // future turns wait for a person. Best-effort, never blocks the pipeline.
+    if (detectNegativeSentiment(mergedText)) {
+      void (async () => {
+        try {
+          await raiseAlert(
+            {
+              workspaceId: batch.workspace_id,
+              kind: "angry_customer",
+              severity: "warning",
+              title: "Cliente molesto — necesita atención",
+              body: `Un cliente escribió con tono negativo. Revisá la conversación y respondé vos.`,
+              meta: { conversationId: batch.conversation_id },
+              dedupKey: `angry_customer:${batch.conversation_id}`,
+            },
+            supabase,
+          );
+          await supabase
+            .from("conversations")
+            .update({ state: "handoff_pending" })
+            .eq("id", batch.conversation_id)
+            .neq("state", "human_active")
+            .neq("state", "handoff_pending");
+        } catch (e) {
+          console.warn(
+            "[buffer] anger escalation failed:",
+            e instanceof Error ? e.message : e,
+          );
+        }
+      })();
+    }
+
     // ── 5. Decision engine: state check + handoff trigger + rate limits ──────
     const decisionResult = await decide({
       workspaceId: batch.workspace_id,
@@ -386,7 +422,19 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     ]
       .filter(Boolean)
       .join("\n\n");
-    const bizContext = buildBusinessInfoContext(businessInfo);
+    // Multi-sucursal: prepend the branches block (empty for single-location).
+    let locationsContext = "";
+    try {
+      locationsContext = await buildLocationsContext(batch.workspace_id);
+    } catch {
+      /* non-fatal */
+    }
+    const bizContext = [
+      buildBusinessInfoContext(businessInfo),
+      locationsContext,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     const basePrompt =
       resolvedPrompt?.body ??
       "Eres un asistente de WhatsApp. Responde de forma concisa y útil en español.";

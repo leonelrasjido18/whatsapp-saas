@@ -12,6 +12,10 @@ import {
 } from "@/features/inbox/services/meta-integration";
 import { processInbound } from "@/features/inbox/services/normalizer";
 import {
+  extractCommentEvents,
+  sendPrivateReply,
+} from "@/features/inbox/services/comment-reply";
+import {
   applyMessageStatusUpdate,
   markConversationOutboundBeforeWatermark,
 } from "@/features/inbox/services/status-updates";
@@ -292,6 +296,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               statusEvent.watermark,
               statusEvent.status,
             );
+          }
+        }
+
+        // #13 Comentario → DM: reply privately to new comments, which opens a
+        // DM the AI then handles. Opt-in per workspace via config.comment_to_dm.
+        // Skips the page's own comments. Best-effort.
+        if ((integration.config as { comment_to_dm?: boolean }).comment_to_dm) {
+          const comments = extractCommentEvents(entry);
+          const dmText =
+            ((integration.config as { comment_reply_message?: string })
+              .comment_reply_message as string | undefined) ||
+            "¡Hola! Vi tu comentario 😊 ¿En qué te puedo ayudar?";
+          for (const c of comments) {
+            if (c.fromId && c.fromId === entryId) continue; // our own comment
+            deferredJobs.push(async () => {
+              await sendPrivateReply(
+                integration.pageAccessToken,
+                c.commentId,
+                dmText,
+              );
+            });
           }
         }
 

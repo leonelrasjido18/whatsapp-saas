@@ -80,6 +80,10 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/r/") ||
     // /tienda/* is the public storefront (#2) — anonymous shoppers, no session.
     pathname.startsWith("/tienda/") ||
+    // Public self-service / shareable pages the customer opens from WhatsApp.
+    pathname.startsWith("/presupuesto/") ||
+    pathname.startsWith("/seguimiento/") ||
+    pathname.startsWith("/turno/") ||
     pathname.startsWith("/auth/");
 
   if (!user && !isPublicRoute) {
@@ -108,5 +112,5 @@ export const config = {
   // widget.js is the public embeddable chat script — it must load on external
   // sites without an auth redirect, so exclude it from the middleware like the
   // other static assets.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|widget.js|api/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|widget.js|sw.js|manifest.webmanifest|api/).*)"],
 };

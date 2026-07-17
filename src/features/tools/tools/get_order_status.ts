@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { Tool } from "../core/tool";
+import { getBaseUrl } from "@/lib/utils";
 
 function svc() {
   return createSbClient(
@@ -75,6 +76,8 @@ export const getOrderStatusTool: Tool<z.infer<typeof schema>> = {
             created_at: o.created_at,
             paid_at: o.paid_at,
             items: o.items,
+            // Self-service tracking page the customer can open anytime.
+            tracking_url: `${getBaseUrl()}/seguimiento/${o.id}`,
           })),
         },
       };

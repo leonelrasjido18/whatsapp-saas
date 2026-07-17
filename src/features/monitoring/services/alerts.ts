@@ -98,6 +98,20 @@ export async function raiseAlert(
     console.error("[alerts] raise error:", error.message);
     return null;
   }
+
+  // New workspace-level alert → push it to the owner's devices (best-effort).
+  if (input.workspaceId) {
+    void import("./push")
+      .then(({ sendPushToWorkspace }) =>
+        sendPushToWorkspace(
+          input.workspaceId!,
+          { title: input.title, body: input.body ?? "", url: "/dashboard" },
+          supabase,
+        ),
+      )
+      .catch(() => {});
+  }
+
   return (data?.id as string) ?? null;
 }
 

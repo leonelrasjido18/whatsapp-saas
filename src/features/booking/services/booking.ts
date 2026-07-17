@@ -219,6 +219,19 @@ export async function createAppointment(
   if (error || !data) {
     return { ok: false, error: error?.message ?? "No se pudo agendar" };
   }
+
+  // #14 Push to Google Calendar (best-effort, no-op when not connected).
+  void import("./google-calendar")
+    .then(({ pushBookingToCalendar }) =>
+      pushBookingToCalendar(input.workspaceId, {
+        startsAt: start.toISOString(),
+        endsAt: end.toISOString(),
+        summary: `${serviceName ?? "Turno"}${input.customerName ? " — " + input.customerName : ""}`,
+        description: input.note ?? undefined,
+      }),
+    )
+    .catch(() => {});
+
   return {
     ok: true,
     appointment: data as Appointment,

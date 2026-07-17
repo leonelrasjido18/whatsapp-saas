@@ -11,6 +11,7 @@ import {
   Settings,
   Trash2,
   CreditCard,
+  Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
   deleteWorkspaceForClient,
   updateWorkspaceBusinessType,
   applyWorkspaceTemplate,
+  createBillingLink,
 } from "../services/agency-actions";
 import { INDUSTRY_TEMPLATES } from "../services/industry-templates";
 import { BUSINESS_TYPES, type BusinessType } from "@/features/workspace/lib/business-type";
@@ -111,6 +113,32 @@ export function WorkspacesTable({ workspaces }: Props) {
         `Plantilla aplicada (${result.productsCreated ?? 0} productos demo).`,
       );
       router.refresh();
+    });
+  }
+
+  // Cobro recurrente: genera un link de suscripción de MercadoPago para el cliente.
+  function handleBilling(workspaceId: string, name: string) {
+    const amountStr = prompt(
+      `Cobro mensual automático para "${name}" (ARS). Ej: 10000`,
+    );
+    if (!amountStr) return;
+    const amount = Number(amountStr);
+    if (!(amount > 0)) {
+      toast.error("Monto inválido");
+      return;
+    }
+    const email = prompt("Email del cliente (pagador en MercadoPago):");
+    if (!email) return;
+    startRefresh(async () => {
+      const res = await createBillingLink(workspaceId, amount, email);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      if (res.initPoint) {
+        toast.success("Link de suscripción creado. Se abrió para copiarlo.");
+        window.open(res.initPoint, "_blank");
+      }
     });
   }
 
@@ -377,6 +405,19 @@ export function WorkspacesTable({ workspaces }: Props) {
                 <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">
                   Billing
+                </span>
+              </Button>
+
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2.5 text-muted-foreground hover:text-foreground"
+                aria-label={`Cobro recurrente de ${workspace.name}`}
+                onClick={() => handleBilling(workspace.id, workspace.name)}
+              >
+                <Repeat className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">
+                  Cobro
                 </span>
               </Button>
 

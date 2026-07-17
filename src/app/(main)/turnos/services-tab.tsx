@@ -94,6 +94,22 @@ export default function ServicesTab({
   return (
     <div className="space-y-6">
       {canManage && (
+        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 p-3">
+          <div>
+            <p className="text-sm font-medium">Google Calendar</p>
+            <p className="text-xs text-muted-foreground">
+              Sincronizá los turnos con tu agenda de Google.
+            </p>
+          </div>
+          <a href="/api/integrations/google/start">
+            <Button size="sm" variant="outline">
+              Conectar
+            </Button>
+          </a>
+        </div>
+      )}
+
+      {canManage && (
         <div className="rounded-lg border border-border/60 p-4 space-y-3">
           <p className="text-sm font-medium">Nuevo servicio</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -54,6 +54,9 @@ export function MetaSection({ workspaceId, initial, onSaved }: MetaSectionProps)
   const [messagesInMemory, setMessagesInMemory] = useState<number>(
     (initial?.config?.message_history_window as number | undefined) ?? 10,
   );
+  const [commentToDm, setCommentToDm] = useState<boolean>(
+    (initial?.config?.comment_to_dm as boolean | undefined) ?? false,
+  );
 
   const isPendingSelection = initial?.config?.pending_selection === true;
   const isConnected = initial?.enabled === true && !isPendingSelection;
@@ -141,6 +144,7 @@ export function MetaSection({ workspaceId, initial, onSaved }: MetaSectionProps)
             config: {
               buffer_silence_seconds: bufferSeconds,
               message_history_window: messagesInMemory,
+              comment_to_dm: commentToDm,
             },
           }),
         });
@@ -443,6 +447,26 @@ export function MetaSection({ workspaceId, initial, onSaved }: MetaSectionProps)
               <p className="text-[11px] text-muted-foreground">
                 Número de mensajes previos pasados a la IA para tener memoria del contexto.
               </p>
+            </div>
+
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-border/60 p-3">
+              <div>
+                <Label htmlFor="meta-comment-dm" className="cursor-pointer">
+                  Responder comentarios por privado (DM)
+                </Label>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Cuando alguien comenta un post de Facebook/Instagram, la IA le
+                  escribe al privado y sigue la conversación. Requiere que la app
+                  de Meta esté suscrita a los comentarios.
+                </p>
+              </div>
+              <input
+                id="meta-comment-dm"
+                type="checkbox"
+                checked={commentToDm}
+                onChange={(e) => setCommentToDm(e.target.checked)}
+                className="mt-1 h-4 w-4"
+              />
             </div>
 
             <div className="pt-2">

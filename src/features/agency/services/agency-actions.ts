@@ -12,6 +12,10 @@ import {
   getIndustryTemplate,
   applyIndustryTemplate as applyTemplate,
 } from "./industry-templates";
+import {
+  createAgencyPreapproval,
+  isAgencyBillingConfigured,
+} from "./agency-billing";
 import type {
   ClientCredentials,
   CreateWorkspaceResult,
@@ -358,6 +362,50 @@ export async function applyWorkspaceTemplate(
   } catch (err) {
     console.error("[agency] applyWorkspaceTemplate error:", err);
     return { error: "Error al aplicar la plantilla" };
+  }
+}
+
+/**
+ * Generates a MercadoPago subscription (Preapproval) link to charge a client the
+ * monthly maintenance fee automatically. Super-admin only. Stores the record.
+ */
+export async function createBillingLink(
+  workspaceId: string,
+  amount: number,
+  payerEmail: string,
+): Promise<{ initPoint?: string; error?: string }> {
+  const userId = await assertSuperAdmin();
+  if (!userId) return { error: "No autorizado" };
+  if (!isAgencyBillingConfigured()) {
+    return {
+      error:
+        "Falta configurar MP_AGENCY_ACCESS_TOKEN (token de MercadoPago de la agencia).",
+    };
+  }
+  if (!(amount > 0) || !payerEmail) {
+    return { error: "Monto y email son obligatorios" };
+  }
+
+  try {
+    const { id, initPoint } = await createAgencyPreapproval({
+      amount,
+      payerEmail,
+    });
+    await svc().from("agency_subscriptions").insert({
+      workspace_id: workspaceId,
+      mp_preapproval_id: id,
+      amount,
+      payer_email: payerEmail,
+      init_point: initPoint,
+      status: "pending",
+    });
+    return { initPoint };
+  } catch (err) {
+    console.error("[agency] createBillingLink error:", err);
+    return {
+      error:
+        err instanceof Error ? err.message : "No se pudo crear el link de cobro",
+    };
   }
 }
 

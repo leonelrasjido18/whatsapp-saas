@@ -229,6 +229,42 @@ select cron.schedule(
   $job$
 );
 
+-- Waitlist: avisa cuando un producto sin stock vuelve a estar disponible (cada 30 min).
+select cron.schedule(
+  'waitlist-notify',
+  '*/30 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/waitlist-notify',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Fidelidad: acumula puntos por órdenes pagas (cada hora a los :05).
+select cron.schedule(
+  'loyalty-accrual',
+  '5 * * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/loyalty-accrual',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
+-- Pedidos recurrentes: recrea el pedido de siempre cuando corresponde (diario 11:00 UTC / 08:00 ART).
+select cron.schedule(
+  'recurring-orders',
+  '0 11 * * *',
+  $job$
+    select net.http_get(
+      url     := '__APP_URL__/api/cron/recurring-orders',
+      headers := jsonb_build_object('Authorization', 'Bearer __CRON_SECRET__')
+    );
+  $job$
+);
+
 -- Verify they registered:
 --   select jobname, schedule, active from cron.job
 --   where jobname in ('buffer-flush', 'invoice-retry', 'tier-decay',

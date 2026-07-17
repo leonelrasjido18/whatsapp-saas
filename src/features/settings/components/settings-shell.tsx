@@ -9,6 +9,7 @@ import { TemplatesTab } from "./templates-tab";
 import { AutomationsTab } from "./automations-tab";
 import { KbTab } from "./kb-tab";
 import { AiOnboardingTab } from "./ai-onboarding-tab";
+import { LocationsTab } from "./locations-tab";
 import { ReviewsTab } from "./reviews-tab";
 import { WebchatTab } from "./webchat-tab";
 import { StorefrontTab } from "./storefront-tab";
@@ -71,6 +72,7 @@ export function SettingsShell({
             <TabsTrigger value="agentes">Agentes</TabsTrigger>
             <TabsTrigger value="integraciones">Integraciones</TabsTrigger>
             <TabsTrigger value="negocio">Negocio</TabsTrigger>
+            <TabsTrigger value="sucursales">Sucursales</TabsTrigger>
             <TabsTrigger value="autocarga">Autocarga IA</TabsTrigger>
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="templates">Templates</TabsTrigger>
@@ -105,6 +107,12 @@ export function SettingsShell({
         <TabsContent value="negocio">
           <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
             <BusinessInfoForm workspaceId={workspaceId} initial={biForForm} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="sucursales">
+          <div className="p-6 space-y-6 rounded-lg border border-border/60 bg-card">
+            <LocationsTab workspaceId={workspaceId} />
           </div>
         </TabsContent>
 
